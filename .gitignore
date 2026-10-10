@@ -50,6 +50,7 @@ coverage.xml
 *.lcov
 .hypothesis/
 .pytest_cache/
+.serpapi_cache/
 cover/
 
 # Translations
@@ -237,3 +238,4 @@ CLAUDE.md
 dist-e2e/
 playwright-report/
 test-results/
+node_modules/
