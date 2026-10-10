@@ -1,9 +1,9 @@
 import type {
+  RecommendationsSection,
   AlertRule,
   AlertRuleUpdate,
   AlertsPage,
   AlertsSummary,
-  BudgetStatus,
   ReplaySection,
   ScanJob,
   DemandSection,
@@ -96,8 +96,6 @@ export const getReports = (request: AuthedApi, id: number) => request<ReportsSec
 
 // ---------------------------------------------------------------- operations
 
-export const getCredits = (request: AuthedApi) => request<BudgetStatus>("/credits");
-
 export const startScanJob = (request: AuthedApi, id: number, options: { force?: boolean; refresh?: boolean } = {}) =>
   request<ScanJob>(`/markets/${id}/scan-jobs`, post(options));
 
@@ -120,3 +118,6 @@ export const updateAlertRule = (request: AuthedApi, id: number, ruleId: number, 
   request<AlertRule>(`/markets/${id}/alert-rules/${ruleId}`, { method: "PATCH", body: JSON.stringify(body) });
 
 export const getReplay = (request: AuthedApi, id: number) => request<ReplaySection>(`/markets/${id}/replay`);
+
+export const getRecommendations = (request: AuthedApi, id: number, scanId?: number | null) =>
+  request<RecommendationsSection>(`/markets/${id}/recommendations${query({ scan_id: scanId ?? undefined })}`);

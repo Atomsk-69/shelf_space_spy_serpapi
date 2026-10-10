@@ -5,11 +5,12 @@ const SECTIONS = ["Overview", "Changes", "Scanner", "Demand", "Shelf", "Opportun
 async function login(page: Page) {
   await page.goto("/login");
   await page.getByRole("button", { name: /sign in|log in/i }).click();
-  await expect(page).toHaveURL(/\/markets/);
+  await expect(page.locator("a.market-card").first()).toBeVisible();
 }
 
 /** The sidebar is always visible on desktop and an off-canvas drawer on mobile, so open it when needed. */
 async function openSection(page: Page, name: string) {
+  await page.locator(".topbar").waitFor(); // the shell renders after the route changes; check the menu only once it exists
   const menu = page.getByRole("button", { name: "Menu", exact: true });
   if (await menu.isVisible()) await menu.click();
   await page.getByRole("navigation", { name: "Market sections" }).getByRole("link", { name, exact: true }).click();
@@ -22,7 +23,7 @@ async function openFirstMarket(page: Page) {
 }
 
 test("redirects to login when signed out", async ({ page }) => {
-  await page.goto("/markets");
+  await page.goto("/");
   await expect(page).toHaveURL(/\/login/);
 });
 
@@ -80,4 +81,15 @@ test("a background scan shows progress and then its result", async ({ page }) =>
   await expect(page.getByRole("progressbar", { name: "Scan progress" })).toBeVisible();
   await expect(page.getByText("Scan complete.")).toBeVisible({ timeout: 10_000 });
   await expect(page.getByRole("progressbar")).toHaveCount(0);
+});
+
+test("the home page is one page with every section, and the sidebar has no market list or new-market link", async ({ page }) => {
+  await login(page);
+  for (const id of ["#top", "#about", "#offer", "#markets", "#add"]) await expect(page.locator(id)).toBeAttached();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("See the shelf");
+  await page.locator("a.market-card").first().click();
+  await expect(page).toHaveURL(/\/markets\/\d+$/);
+  const sidebar = page.locator("#app-sidebar");
+  await expect(sidebar.getByRole("link", { name: "All markets" })).toHaveCount(0);
+  await expect(sidebar.getByRole("link", { name: "New market" })).toHaveCount(0);
 });

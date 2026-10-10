@@ -20,7 +20,7 @@ DASHBOARD = {
     "shelf_share": [{"brand": "Coleman", "share_pct": 22.4, "is_mine": False, "listings": 6}],
     "opportunities": [{"keyword": "camping tent", "score": 71.3, "label": "Attractive", "demand_growth": 18.0,
                        "supply_growth": -4.2, "reasons": ["Search interest up 18% (last 4 weeks vs prior 8)."],
-                       "caveats": ["Includes demo historical data."]}],
+                       "caveats": ["Based on a sampled shelf."]}],
     "has_demo_history": True,
     "latest_scan_at": "2026-10-14T12:00:00+00:00",
     "scan_count": 5,
@@ -41,7 +41,8 @@ def test_template_is_deterministic_and_uses_only_input_numbers():
     inputs = build_inputs(MARKET, DASHBOARD)
     text = template_brief(inputs)
     assert text == template_brief(inputs)
-    assert "demo data" in text and "Coleman" in text and "Attractive" in text
+    assert "Coleman" in text and "Attractive" in text
+    assert "demo" not in text.lower() and "credit" not in text.lower()  # no demo or credit wording in the brief
     assert unsupported_numbers(text, inputs) == []
 
 

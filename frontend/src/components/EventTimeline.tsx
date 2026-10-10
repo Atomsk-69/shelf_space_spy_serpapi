@@ -1,7 +1,7 @@
 import type { MarketEvent } from "../types";
 import { EVENT_TYPES, groupByDay } from "../lib/events";
 import { formatPrice, humanize } from "../lib/format";
-import { ConfidenceBadge, DemoBadge, SeverityBadge } from "./ui/Badge";
+import { ConfidenceBadge, SeverityBadge } from "./ui/Badge";
 
 const dayFormat = new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 const timeFormat = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" });
@@ -46,7 +46,6 @@ export function EventTimeline({
                         <strong className="timeline-type">{meta.label}</strong>
                         <SeverityBadge level={event.severity} />
                         <ConfidenceBadge level={event.confidence} />
-                        {event.is_demo && <DemoBadge />}
                       </span>
                       <span className="timeline-summary">{event.summary}</span>
                       {(event.keyword || change) && (

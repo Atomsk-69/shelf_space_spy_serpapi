@@ -33,8 +33,7 @@ Google Shopping shelf and Google Trends. Rules:
 - Use only facts and numbers that appear in the JSON. Never calculate, estimate, round
   differently or invent any number, date, rank or percentage. If a number is not in the
   JSON, describe the point without a number.
-- Keep every caveat that matters: sampled shelf visibility is not market share, and if
-  "has_demo_history" is true say clearly that part of the history is demo data.
+- Keep every caveat that matters: sampled shelf visibility is not market share.
 - Never hide uncertainty. Each event and opportunity has a confidence; say so when it is
   not high. If "probe_stability" marks a probe as volatile, say its rank and new-product
   signals are likely noise. If "low_confidence_events_hidden" is above zero, mention that
@@ -253,8 +252,6 @@ def template_brief(inputs: dict[str, Any]) -> str:
     lines = [f"Weekly brief: {market['name']} ({market['category']}, {market['country']})"]
     if inputs["period"]["start"]:
         lines.append(f"Period: {inputs['period']['start']} to {inputs['period']['end']}")
-    if inputs["has_demo_history"]:
-        lines.append("Note: part of the history in this brief is demo data, not real observations.")
     lines.append("")
 
     headline = f"{fmt_number(kpis.get('observed_skus'))} products observed on the sampled shelf"

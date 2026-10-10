@@ -4,7 +4,7 @@ import { useProduct } from "../api/hooks";
 import type { ObservationRow } from "../types";
 import { DASH, formatDateTime, formatInt, formatPrice } from "../lib/format";
 import { Loading, QueryBody } from "./states";
-import { Badge, DemoBadge, InferredBadge } from "./ui/Badge";
+import { Badge, InferredBadge } from "./ui/Badge";
 import { Drawer } from "./ui/Drawer";
 
 const TICK = { fill: "var(--viz-muted)", fontSize: 11 };
@@ -122,9 +122,7 @@ export function ProductDrawer({
                   <tbody>
                     {value.history.map((point) => (
                       <tr key={point.scan_id}>
-                        <td>
-                          {formatDateTime(point.scanned_at)} {point.is_demo && <DemoBadge label="Demo" />}
-                        </td>
+                        <td>{formatDateTime(point.scanned_at)}</td>
                         <td className="num">{point.best_position ?? DASH}</td>
                         <td className="num">{point.lowest_price === null ? DASH : formatPrice(point.lowest_price, country)}</td>
                         <td>{point.retailers.join(", ") || DASH}</td>

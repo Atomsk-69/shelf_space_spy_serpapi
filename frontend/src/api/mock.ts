@@ -475,7 +475,6 @@ export async function mockApi<T>(path: string, options: RequestInit = {}, token?
   if (method === "POST" && pathname === "/markets") return clone(createMarket(parseBody<MarketCreate>(options))) as T;
   if (method === "POST" && pathname === "/markets/suggest") return clone(suggest(parseBody<SuggestRequest>(options))) as T;
 
-  if (method === "GET" && pathname === "/credits") return clone({ daily_budget: 50, credits_used_today: 0, budget_remaining: 50 }) as T;
   if (method === "GET" && pathname === "/alerts/summary") return clone({ unread: 0, by_market: {} }) as T;
 
   const match = /^\/markets\/(\d+)(\/.*)?$/.exec(pathname);
@@ -506,6 +505,7 @@ export async function mockApi<T>(path: string, options: RequestInit = {}, token?
     }
     if (method === "GET" && rest === "/alerts") return clone({ items: [], total: 0, unread: 0, limit: 20, offset: 0 }) as T;
     if (method === "GET" && rest === "/alert-rules") return clone([]) as T;
+    if (method === "GET" && rest === "/recommendations") return clone({ has_data: false, scan: null, items: [], notes: [] }) as T;
     if (method === "GET" && rest === "/replay") return clone({ scans: [] }) as T;
     if (method === "POST" && rest === "/scan") return clone(scan(state)) as T;
     if (method === "POST" && rest === "/reports/weekly") {

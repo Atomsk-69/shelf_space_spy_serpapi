@@ -7,10 +7,11 @@ import { OpportunityCards } from "../../components/dashboard/OpportunityCards";
 import { Panel } from "../../components/Panel";
 import { SectionPage } from "../../components/SectionPage";
 import { EmptyState, ErrorState, Loading, QueryBody } from "../../components/states";
-import { Badge, DemoBadge } from "../../components/ui/Badge";
+import { Badge } from "../../components/ui/Badge";
 import { findSection, parseBrief, type BriefSection } from "../../lib/brief";
 import { formatDateTime, formatRelativeTime } from "../../lib/format";
 import { parseMarketId } from "../../lib/ids";
+import { scrubText } from "../../lib/text";
 import { fallbackExplanation, sourceLabel } from "../../lib/report";
 import type { Report } from "../../types";
 
@@ -31,7 +32,7 @@ function Bullets({ section }: { section: BriefSection }) {
   );
 }
 
-/** Provenance: who wrote this brief, why a fallback happened, and whether demo data is involved. */
+/** Provenance: who wrote this brief and, for a template, why the AI writer was not used. */
 function Provenance({ report }: { report: Report }) {
   const label = sourceLabel(report);
   const why = fallbackExplanation(report);
@@ -42,7 +43,6 @@ function Provenance({ report }: { report: Report }) {
         <Badge tone={report.source === "llm" ? "info" : "neutral"} icon={report.source === "llm" ? "✦" : "▤"}>
           {label ?? "Brief"}
         </Badge>
-        {report.diagnostics?.data_includes_demo && <DemoBadge label="Includes demo data" />}
       </div>
       <p className="data-note" title={formatDateTime(report.created_at)}>
         Written {formatRelativeTime(report.created_at)}
@@ -188,7 +188,7 @@ export default function BriefPage() {
                       {formatDateTime(item.created_at)} · {sourceLabel(item) ?? "Brief"}
                     </summary>
                     {fallbackExplanation(item) && <p className="field-hint">{fallbackExplanation(item)}</p>}
-                    <pre className="report-text">{item.content}</pre>
+                    <pre className="report-text">{scrubText(item.content)}</pre>
                   </details>
                 </li>
               ))}

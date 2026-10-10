@@ -49,7 +49,6 @@ export function TopBar({
 }) {
   const hasMarket = Number.isInteger(marketId) && marketId > 0;
   const market = useMarket(marketId);
-  const credits = scan.credits;
   return (
     <header className="topbar">
       <button
@@ -65,17 +64,12 @@ export function TopBar({
       <MarketSwitcher />
       <div className="topbar-right">
         {hasMarket && <ScanStatus marketId={marketId} scan={scan} />}
-        {hasMarket && credits && credits.daily_budget > 0 && (
-          <span className="credit-pill" title="Live SerpAPI credits used today (UTC) of the daily budget">
-            {credits.credits_used_today}/{credits.daily_budget} credits
-          </span>
-        )}
         <AlertBell />
         {hasMarket ? (
-          <ScanButton market={market.data} pending={scan.busy} onConfirm={scan.run} budget={credits} />
+          <ScanButton market={market.data} pending={scan.busy} onConfirm={scan.run} />
         ) : (
-          <Link to="/markets/new" className="button-link topbar-cta">
-            New market
+          <Link to="/" className="button-link topbar-cta">
+            Home
           </Link>
         )}
       </div>

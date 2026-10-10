@@ -17,6 +17,7 @@ from app.intelligence.common import brand_key
 from app.intelligence.demand import demand_by_keyword
 from app.intelligence.events import probe_stability
 from app.intelligence.pricing import price_stats
+from app.intelligence.recommendations import build_recommendations
 from app.intelligence.shelf_share import collapse_tail, shelf_share, shelf_share_by_probe
 from app.intelligence.supply import supply_by_keyword, supply_growth_pct
 from app.services.analytics_service import (
@@ -278,3 +279,27 @@ def alerts_section(market: Row, *, unread_only: bool, limit: int, offset: int) -
     limit, offset = clamp_page(limit, offset)
     rows, total, unread = repo.alerts_page(market["id"], unread_only=unread_only, limit=limit, offset=offset)
     return {"items": rows, "total": total, "unread": unread, "limit": limit, "offset": offset}
+
+
+def recommendations_section(market: Row, scan_id: int | None = None) -> Row:
+    """Recommended actions for one scan. Built only from stored data via ``build_recommendations``: no
+    SerpAPI call, no model, no writes."""
+    latest = pick_scan(market["id"], scan_id)
+    if latest is None:
+        return {"has_data": False, "scan": None, "items": [], "notes": []}
+    opportunities = opportunities_section(market, scan_id)["items"]
+    if not opportunities:
+        return {"has_data": False, "scan": _scan_ref(latest), "items": [], "notes": []}
+    demand = {item["keyword"].lower(): item for item in demand_section(market, scan_id).get("keywords", [])}
+    pricing = {item["keyword"].lower(): item for item in pricing_section(market, scan_id).get("probes", [])}
+    supply = {item["keyword"].lower(): item for item in supply_section(market, scan_id).get("probes", [])}
+    stability = shelf_section(market, scan_id).get("stability", {})
+    shopping = repo.list_scans(market["id"], "shopping")
+    position = next(i for i, scan in enumerate(shopping) if scan["id"] == latest["id"])
+    window = shopping[max(0, position - HISTORY_SCANS): position + 1]
+    items, notes = build_recommendations(
+        opportunities=opportunities, demand=demand, pricing=pricing, supply=supply, stability=stability,
+        events=repo.events_for_scan(latest["id"]), scan_count=position + 1,
+        uses_demo_data=any(scan["is_demo"] for scan in window),
+    )
+    return {"has_data": True, "scan": _scan_ref(latest), "items": items, "notes": notes}

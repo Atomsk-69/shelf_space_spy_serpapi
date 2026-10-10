@@ -61,9 +61,12 @@ describe("ScanProgress", () => {
   it("explains a failure with the reason and a hint, and can be dismissed", async () => {
     const onDismiss = vi.fn();
     render(
-      <ScanProgress job={{ ...baseJob, status: "failed", error: "Out of credits today.", error_code: "budget" }} onDismiss={onDismiss} />,
+      <ScanProgress
+        job={{ ...baseJob, status: "failed", error: "The daily scan limit was reached.", error_code: "budget" }}
+        onDismiss={onDismiss}
+      />,
     );
-    expect(screen.getByRole("alert")).toHaveTextContent(/Out of credits today.*midnight UTC/);
+    expect(screen.getByRole("alert")).toHaveTextContent(/daily scan limit was reached.*midnight UTC/);
     await userEvent.click(screen.getByRole("button", { name: "Dismiss" }));
     expect(onDismiss).toHaveBeenCalled();
   });
@@ -174,7 +177,7 @@ describe("ReplayPage", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Previous" }));
     expect(screen.getByText(/Scan 2 of 3/)).toBeInTheDocument();
-    expect(screen.getByText("Demo data")).toBeInTheDocument();
+    expect(screen.queryByText(/demo/i)).not.toBeInTheDocument();
     expect(hooks.useShelf).toHaveBeenLastCalledWith(1, 12);
     expect(hooks.useEvents).toHaveBeenLastCalledWith(1, { types: [], includeLow: false, limit: 25, offset: 0, scanId: 12 });
   });

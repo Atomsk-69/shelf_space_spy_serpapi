@@ -3,8 +3,8 @@ import { useNavigate } from "react-router-dom";
 
 import { useCreateMarket, useSuggestMarket } from "../api/hooks";
 import { errorMessage } from "../api/errors";
-import { ChipEditor, type Chip } from "../components/ChipEditor";
-import { ErrorState } from "../components/states";
+import { ChipEditor, type Chip } from "./ChipEditor";
+import { ErrorState } from "./states";
 import type { BrandSuggestion } from "../types";
 
 // SerpAPI `gl` codes. The backend lowercases whatever it receives.
@@ -35,7 +35,8 @@ type Step = "describe" | "review";
 
 const selectedValues = (chips: Chip[]) => chips.filter((chip) => chip.selected).map((chip) => chip.value);
 
-export default function NewMarketPage() {
+/** Guided setup for a new market: describe it, review the suggested probes and brands, create. Opens the new market's dashboard. */
+export function NewMarketForm() {
   const navigate = useNavigate();
   const suggest = useSuggestMarket();
   const create = useCreateMarket();
@@ -119,17 +120,6 @@ export default function NewMarketPage() {
 
   return (
     <>
-      <section className="page-intro">
-        <div>
-          <p className="card-label">GUIDED SETUP</p>
-          <h1 className="page-title">Track a new market</h1>
-          <p className="lede">
-            Type any category and country. We'll propose search probes and competitor brands from live shopping data, and you decide what to
-            keep.
-          </p>
-        </div>
-      </section>
-
       <ol className="stepper" aria-label="Setup steps">
         <li aria-current={step === "describe" ? "step" : undefined} className={step === "describe" ? "is-current" : "is-done"}>
           1. Describe the market
@@ -163,9 +153,7 @@ export default function NewMarketPage() {
               </select>
             </label>
           </div>
-          <p className="field-hint">
-            Suggestions use about 2 SerpAPI credits (one autocomplete, one shopping search). Cached results cost nothing.
-          </p>
+          <p className="field-hint">Suggestions come from Google autocomplete and shopping results for your category.</p>
           {suggest.isError && (
             <div className="setup-error">
               <ErrorState error={suggest.error} title="Couldn't fetch suggestions" />
@@ -220,7 +208,7 @@ export default function NewMarketPage() {
 
           <ChipEditor
             label="Search probes"
-            hint={`Up to ${MAX_KEYWORDS} probes so they fit one Google Trends batch (Trends values are only comparable within a batch). Each probe costs about 1 SerpAPI credit per scan.`}
+            hint={`Up to ${MAX_KEYWORDS} probes so they fit one Google Trends batch (Trends values are only comparable within a batch).`}
             chips={keywordChips}
             onChange={setKeywordChips}
             maxSelected={MAX_KEYWORDS}

@@ -56,7 +56,7 @@ def test_seed_history_creates_flagged_backdated_scans_and_events(scanned_market)
     assert dashboard["kpis"]["new_products"] >= 1
     assert dashboard["kpis"]["demand_change_pct"] is not None
     assert any(o["demand_growth"] is not None for o in dashboard["opportunities"])
-    assert all("Includes demo historical data." in o["caveats"] for o in dashboard["opportunities"])
+    assert not any("demo" in c.lower() for o in dashboard["opportunities"] for c in o["caveats"])  # no demo wording shown
     # changes measured against demo weeks are demo data too, even on the real scan
     assert dashboard["events"] and all(event["is_demo"] for event in dashboard["events"])
     # supply growth compares with the demo scan one week earlier, not "the previous scan"

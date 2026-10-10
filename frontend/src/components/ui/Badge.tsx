@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import { humanize } from "../../lib/format";
 
-export type Tone = "neutral" | "good" | "warn" | "bad" | "info" | "demo";
+export type Tone = "neutral" | "good" | "warn" | "bad" | "info";
 
 /** Small status pill. Meaning is carried by the icon and text, never by color alone. */
 export function Badge({ tone = "neutral", icon, title, children }: { tone?: Tone; icon?: string; title?: string; children: ReactNode }) {
@@ -50,12 +50,6 @@ export function ConfidenceBadge({ level }: { level: string | null | undefined })
     </Badge>
   );
 }
-
-export const DemoBadge = ({ label = "Demo data" }: { label?: string }) => (
-  <Badge tone="demo" icon="◷" title="Generated from a real scan to demonstrate history. Not a real observation.">
-    {label}
-  </Badge>
-);
 
 export const InferredBadge = () => (
   <Badge tone="warn" icon="?" title="This brand was guessed from the product title and is not confirmed.">

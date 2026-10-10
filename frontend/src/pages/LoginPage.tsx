@@ -11,7 +11,7 @@ const DEMO_PASSWORD = "Demo@123";
 
 function redirectTarget(state: unknown): string {
   const from = (state as { from?: unknown } | null)?.from;
-  return typeof from === "string" && from.startsWith("/") && from !== "/login" ? from : "/markets";
+  return typeof from === "string" && from.startsWith("/") && from !== "/login" ? from : "/";
 }
 
 export default function LoginPage() {
@@ -54,7 +54,6 @@ export default function LoginPage() {
         <div className="login-card">
           <p className="card-label">WELCOME BACK</p>
           <h2>Enter your market room</h2>
-          <p className="muted">Demo credentials are already filled in.</p>
           {notice && (
             <p className="notice notice-info" role="status">
               {notice}

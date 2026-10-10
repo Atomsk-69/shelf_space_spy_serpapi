@@ -8,7 +8,7 @@ import { ShelfShareBars } from "../../components/dashboard/ShelfShareBars";
 import { Panel } from "../../components/Panel";
 import { SectionPage } from "../../components/SectionPage";
 import { EmptyState, Loading, QueryBody } from "../../components/states";
-import { Badge, DemoBadge } from "../../components/ui/Badge";
+import { Badge } from "../../components/ui/Badge";
 import { formatDateTime, formatInt, formatPrice } from "../../lib/format";
 import { parseMarketId } from "../../lib/ids";
 
@@ -53,7 +53,7 @@ export default function ReplayPage() {
       id={id}
       label="REPLAY"
       title="Step back through the stored scans"
-      intro="Move the slider to see how the shelf, prices, scores and detected changes looked at each scan. Read-only: nothing here re-runs a scan or spends credits."
+      intro="Move the slider to see how the shelf, prices, scores and detected changes looked at each scan. Read-only: nothing here re-runs a scan."
       scan={shelf.data?.scan}
     >
       <QueryBody
@@ -108,14 +108,13 @@ export default function ReplayPage() {
                 <li key={scan.id}>
                   <button
                     type="button"
-                    className={tick === position ? "scan-tick is-current" : scan.is_demo ? "scan-tick is-demo" : "scan-tick"}
+                    className={tick === position ? "scan-tick is-current" : "scan-tick"}
                     aria-current={tick === position ? "true" : undefined}
                     onClick={() => go(tick)}
                   >
                     <span className="scan-tick-date">
                       {new Date(scan.scanned_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                     </span>
-                    {scan.is_demo && <span className="scan-tick-demo">demo</span>}
                   </button>
                 </li>
               ))}
@@ -123,13 +122,12 @@ export default function ReplayPage() {
             {current && (
               <div className="replay-context" role="status" aria-live="polite">
                 <div className="badge-row">
-                  <Badge tone="info" icon="◉" title="Replay only reads stored scans. It never runs a scan or spends credits.">
+                  <Badge tone="info" icon="◉" title="Replay only reads stored scans. It never runs a scan.">
                     Read-only replay
                   </Badge>
                   <Badge tone="neutral">
                     Scan {position + 1} of {value.scans.length}
                   </Badge>
-                  {current.is_demo && <DemoBadge />}
                 </div>
                 <p className="field-hint">
                   {formatDateTime(current.scanned_at)} · {formatInt(current.products)} listings · {formatInt(current.events)} change

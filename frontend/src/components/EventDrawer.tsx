@@ -1,7 +1,7 @@
 import type { MarketEvent } from "../types";
 import { EVENT_TYPES, evidenceEntries } from "../lib/events";
 import { formatDateTime, formatPrice, formatSignedPct, humanize } from "../lib/format";
-import { ConfidenceBadge, DemoBadge, SeverityBadge, UnstableBadge } from "./ui/Badge";
+import { ConfidenceBadge, SeverityBadge, UnstableBadge } from "./ui/Badge";
 import { Drawer } from "./ui/Drawer";
 
 function value(v: number | null, kind: string, country: string): string | null {
@@ -34,7 +34,6 @@ export function EventDrawer({ event, country, onClose }: { event: MarketEvent | 
           <div className="badge-row">
             <SeverityBadge level={event.severity} />
             <ConfidenceBadge level={event.confidence} />
-            {event.is_demo && <DemoBadge />}
             {stability !== null && stability < 0.3 && <UnstableBadge overlap={stability} />}
           </div>
           <p className="drawer-summary">{event.summary}</p>

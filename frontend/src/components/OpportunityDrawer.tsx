@@ -1,5 +1,6 @@
 import type { Opportunity } from "../types";
 import { formatSignedPct } from "../lib/format";
+import { visibleLines } from "../lib/text";
 import { LABEL_COLOR, LABEL_HINT, normalizeLabel } from "../lib/opportunity";
 import { ConfidenceBadge, HistoryBadge } from "./ui/Badge";
 import { Drawer } from "./ui/Drawer";
@@ -22,6 +23,8 @@ const FACTOR_TEXT: Record<string, (value: unknown) => string | null> = {
 /** Everything behind one score: the score itself, the separate confidence, its components, reasons and caveats. */
 export function OpportunityDrawer({ opportunity, onClose }: { opportunity: Opportunity | null; onClose: () => void }) {
   const label = opportunity ? normalizeLabel(opportunity.label, opportunity.score) : null;
+  const reasons = visibleLines(opportunity?.reasons ?? []);
+  const caveats = visibleLines(opportunity?.caveats ?? []);
   const factors = (opportunity?.confidence?.factors ?? {}) as Record<string, unknown>;
   const scans = typeof factors.scan_count === "number" ? factors.scan_count : null;
   return (
@@ -98,9 +101,9 @@ export function OpportunityDrawer({ opportunity, onClose }: { opportunity: Oppor
 
           <section className="evidence-block" aria-label="Why">
             <h4>Why</h4>
-            {opportunity.reasons.length > 0 ? (
+            {reasons.length > 0 ? (
               <ul className="bullet-list">
-                {opportunity.reasons.map((reason, index) => (
+                {reasons.map((reason, index) => (
                   <li key={index}>{reason}</li>
                 ))}
               </ul>
@@ -109,11 +112,11 @@ export function OpportunityDrawer({ opportunity, onClose }: { opportunity: Oppor
             )}
           </section>
 
-          {opportunity.caveats.length > 0 && (
+          {caveats.length > 0 && (
             <section className="evidence-block" aria-label="Caveats">
               <h4>Caveats</h4>
               <ul className="bullet-list caveat-list">
-                {opportunity.caveats.map((caveat, index) => (
+                {caveats.map((caveat, index) => (
                   <li key={index}>{caveat}</li>
                 ))}
               </ul>

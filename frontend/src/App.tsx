@@ -9,8 +9,7 @@ import MarketLayout from "./pages/MarketLayout";
 import { RequireAuth } from "./components/RequireAuth";
 import { Loading } from "./components/states";
 import LoginPage from "./pages/LoginPage";
-import MarketsPage from "./pages/MarketsPage";
-import NewMarketPage from "./pages/NewMarketPage";
+import LandingPage from "./pages/LandingPage";
 import NotFoundPage from "./pages/NotFoundPage";
 
 // The dashboard pulls in recharts; load it only when a market is opened.
@@ -44,15 +43,22 @@ export default function App() {
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route
+              path="/"
+              element={
+                <RequireAuth>
+                  <LandingPage />
+                </RequireAuth>
+              }
+            />
+            <Route path="/markets" element={<Navigate to="/" replace />} />
+            <Route path="/markets/new" element={<Navigate to="/#add" replace />} />
+            <Route
               element={
                 <RequireAuth>
                   <AppShell />
                 </RequireAuth>
               }
             >
-              <Route path="/" element={<Navigate to="/markets" replace />} />
-              <Route path="/markets" element={<MarketsPage />} />
-              <Route path="/markets/new" element={<NewMarketPage />} />
               <Route path="/markets/:id" element={<MarketLayout />}>
                 <Route index element={withFallback(<DashboardPage />)} />
                 <Route path="changes" element={withFallback(<ChangesPage />)} />

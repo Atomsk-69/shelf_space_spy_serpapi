@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import type { Signal } from "../../lib/signals";
 import { formatSignedPct } from "../../lib/format";
 import { normalizeLabel } from "../../lib/opportunity";
-import { ConfidenceBadge, DemoBadge, SeverityBadge } from "../ui/Badge";
+import { ConfidenceBadge, SeverityBadge } from "../ui/Badge";
 import { InfoTip } from "../ui/InfoTip";
 
 export function SignalList({ signals, marketId }: { signals: Signal[]; marketId: number }) {
@@ -32,7 +32,6 @@ export function SignalList({ signals, marketId }: { signals: Signal[]; marketId:
               <span className="signal-kind">Change</span>
               <SeverityBadge level={signal.event.severity} />
               <ConfidenceBadge level={signal.event.confidence} />
-              {signal.event.is_demo && <DemoBadge />}
             </div>
             <p className="signal-title">{signal.event.summary}</p>
             <p className="signal-detail">

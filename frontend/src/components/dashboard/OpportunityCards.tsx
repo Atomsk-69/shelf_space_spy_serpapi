@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import type { Opportunity } from "../../types";
 import { formatSignedPct } from "../../lib/format";
+import { visibleLines } from "../../lib/text";
 import { LABEL_COLOR, LABEL_HINT, normalizeLabel } from "../../lib/opportunity";
 import { OpportunityDrawer } from "../OpportunityDrawer";
 import { ConfidenceBadge } from "../ui/Badge";
@@ -15,6 +16,7 @@ export function OpportunityCards({ opportunities }: { opportunities: Opportunity
       <ol className="opportunity-list ranked">
         {sorted.map((opportunity, index) => {
           const label = normalizeLabel(opportunity.label, opportunity.score);
+          const caveatCount = visibleLines(opportunity.caveats).length;
           const score = Math.max(0, Math.min(100, Math.round(opportunity.score)));
           return (
             <li key={opportunity.keyword} className="opportunity-card">
@@ -51,10 +53,7 @@ export function OpportunityCards({ opportunities }: { opportunities: Opportunity
               </div>
               <button type="button" className="disclosure" onClick={() => setSelected(opportunity)}>
                 Evidence
-                {opportunity.caveats.length > 0
-                  ? ` · ${opportunity.caveats.length} caveat${opportunity.caveats.length === 1 ? "" : "s"}`
-                  : ""}{" "}
-                →
+                {caveatCount > 0 ? ` · ${caveatCount} caveat${caveatCount === 1 ? "" : "s"}` : ""} →
               </button>
             </li>
           );

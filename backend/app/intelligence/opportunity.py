@@ -185,8 +185,6 @@ def score_opportunity(
         caveats.append(f"Only {scan_count} scan{'s' if scan_count != 1 else ''} of history.")
     if stability is not None and stability < 0.5:
         caveats.append(f"The shelf changed a lot {_comparison_text(comparison_days)}; treat movements cautiously.")
-    if uses_demo_data:
-        caveats.append("Includes demo historical data.")
     caveats.append(SHELF_SAMPLE_CAVEAT)
     return {
         "keyword": keyword,

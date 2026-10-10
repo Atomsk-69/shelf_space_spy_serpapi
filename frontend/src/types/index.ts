@@ -310,8 +310,6 @@ export type ReportsSection = { items: Report[] };
 
 // ---------------------------------------------------------------- operations: budget, scan jobs, alerts, replay
 
-export type BudgetStatus = { daily_budget: number; credits_used_today: number; budget_remaining: number | null };
-
 export type ScanJob = {
   id: number;
   market_id: number;
@@ -366,3 +364,32 @@ export type AlertsSummary = { unread: number; by_market: Record<string, number> 
 export type ReplayScan = { id: number; scanned_at: string; is_demo: boolean; products: number; events: number };
 
 export type ReplaySection = { scans: ReplayScan[] };
+
+// ---------------------------------------------------------------- recommended actions
+// Deterministic rules over stored data (backend/app/intelligence/recommendations.py). Hypotheses, not advice.
+
+export type EvidenceItem = {
+  label: string;
+  value: number | string | null;
+  kind: "pct" | "pct_signed" | "price" | "score" | "count" | "text";
+};
+
+export type RecommendationKind =
+  "investigate" | "collect_data" | "deprioritize" | "test_price" | "monitor_competitor" | "watch_entrant" | "check_exit";
+
+export type Recommendation = {
+  id: string;
+  kind: RecommendationKind | string;
+  priority: "high" | "medium" | "low";
+  probe: string | null;
+  title: string;
+  summary: string;
+  evidence: EvidenceItem[];
+  action: string;
+  confidence: string;
+  limitations: string[];
+  uses_demo_data: boolean;
+  source: "opportunity" | "pricing" | "event" | "data" | string;
+};
+
+export type RecommendationsSection = { has_data: boolean; scan: ScanRef | null; items: Recommendation[]; notes: string[] };

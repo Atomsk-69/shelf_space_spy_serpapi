@@ -96,7 +96,7 @@ def test_supply_growth_wording():
 def test_demo_data_caveat_and_incumbents():
     result = score_opportunity("k", demand=None, supply=None, supply_growth=None, pricing=None, incumbents=None,
                                scan_count=1, stability=None, uses_demo_data=True)
-    assert "Includes demo historical data." in result["caveats"]
+    assert not any("demo" in caveat.lower() for caveat in result["caveats"])  # no demo wording is shown
     rows = [obs(f"P{i}", position=i + 1, reviews=r, rating=4.0) for i, r in enumerate([10, 100, 1000])]
     strength = incumbent_strength(rows)
     assert strength["median_reviews"] == 100 and strength["avg_rating"] == pytest.approx(4.0)

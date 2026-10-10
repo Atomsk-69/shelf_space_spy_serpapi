@@ -1,7 +1,7 @@
 import type { ScanJob } from "../types";
 
 const FAILURE_HINTS: Record<string, string> = {
-  budget: "The daily credit budget resets at midnight UTC. Cached data is still available.",
+  budget: "The daily scan limit resets at midnight UTC. Stored data is still available.",
   too_soon: "Wait a little, or run the scan again with force from the API if you really need fresh data now.",
   in_progress: "Another scan for this market is already running.",
   quota: "Your SerpAPI plan has no searches left, or the key was rejected.",

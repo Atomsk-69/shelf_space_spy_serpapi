@@ -45,7 +45,7 @@ export function ConfirmDialog({
         <h2 id={titleId}>{title}</h2>
         <div className="confirm-content">{children}</div>
         <div className="confirm-actions">
-          {/* Cancel takes initial focus: confirming may spend API credits, so Enter shouldn't do it by accident. */}
+          {/* Cancel takes initial focus: confirming starts a real scan, so Enter shouldn't do it by accident. */}
           <button type="button" className="button-secondary" onClick={onCancel} autoFocus>
             {cancelLabel}
           </button>

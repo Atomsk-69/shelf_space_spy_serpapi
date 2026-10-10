@@ -1,5 +1,6 @@
 import type { ShelfShareEntry } from "../../types";
 import { formatPct } from "../../lib/format";
+import { HBarChart, type BarDatum } from "../charts/Bars";
 
 /**
  * The backend keeps the 10 most visible brands (plus yours) and already folds the tail into one
@@ -40,49 +41,27 @@ function foldRows(entries: ShelfShareEntry[]): ShelfShareEntry[] {
 }
 
 /**
- * Emphasis bars: your brand in the accent, everyone else in a recessive gray.
- * Research-only markets (no brand of yours) are one series, drawn in the series color.
- * Every bar is direct-labelled, so the list doubles as its own table view.
+ * Bar chart of observed visibility share: your brand in the accent, everyone else in a recessive gray.
+ * "Other brands" and "Unbranded" are drawn lighter and last. A table view repeats every number.
  */
 export function ShelfShareBars({ entries }: { entries: ShelfShareEntry[] }) {
   const rows = foldRows(entries);
-  const max = Math.max(...rows.map((row) => row.share_pct), 1);
-  const hasMine = rows.some((row) => row.is_mine);
+  const data: BarDatum[] = rows.map((row) => ({
+    name: row.is_mine ? `${row.brand} (you)` : row.brand,
+    value: row.share_pct,
+    highlight: row.is_mine,
+    color: !row.is_mine && (row.brand === OTHER_BRANDS || row.brand === UNBRANDED) ? "var(--viz-track)" : undefined,
+    note: row.listings ? `${row.listings} listing${row.listings === 1 ? "" : "s"}` : undefined,
+  }));
   return (
-    <figure className="chart-figure">
-      {hasMine && (
-        <ul className="chart-legend" aria-label="Legend">
-          <li>
-            <span className="legend-swatch legend-bar legend-mine" aria-hidden="true" />
-            Your brand
-          </li>
-          <li>
-            <span className="legend-swatch legend-bar legend-other" aria-hidden="true" />
-            Other brands
-          </li>
-        </ul>
-      )}
-      <ul className={hasMine ? "share-bars" : "share-bars single-series"}>
-        {rows.map((row) => (
-          <li
-            key={row.brand}
-            className={row.is_mine ? "share-row is-mine" : "share-row"}
-            title={`${row.brand}: ${formatPct(row.share_pct)} of visible shelf${row.listings ? `, ${row.listings} listing${row.listings === 1 ? "" : "s"}` : ""}`}
-          >
-            <span className="share-name">
-              {row.brand}
-              {row.is_mine && <span className="chip-tag">you</span>}
-            </span>
-            <span className="share-track" aria-hidden="true">
-              <span className="share-fill" style={{ width: `${Math.max(0, (row.share_pct / max) * 100)}%` }} />
-            </span>
-            <span className="share-value">{formatPct(row.share_pct)}</span>
-          </li>
-        ))}
-      </ul>
-      <figcaption className="chart-caption">
-        Position-weighted visibility across your probes on the sampled Google Shopping shelf. This is shelf presence, not sales share.
-      </figcaption>
-    </figure>
+    <HBarChart
+      data={data}
+      format={(value) => formatPct(value)}
+      unit="of the visible shelf"
+      valueHeader="Share of visible shelf"
+      label="Observed visibility share by brand"
+      domainMax={Math.max(...rows.map((row) => row.share_pct), 1) * 1.05}
+      caption="Position-weighted visibility across your probes on the sampled Google Shopping shelf. This is shelf presence, not sales share."
+    />
   );
 }

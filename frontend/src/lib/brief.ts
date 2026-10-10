@@ -1,6 +1,8 @@
 export type BriefSection = { title: string; bullets: string[]; text: string[] };
 export type ParsedBrief = { headline: string; sections: BriefSection[] };
 
+import { isVisibleLine } from "./text";
+
 const KNOWN = new Map([
   ["what changed", "What changed"],
   ["shelf", "Shelf"],
@@ -20,7 +22,10 @@ const strip = (line: string) =>
  * Anything unrecognised stays visible: it lands in an "Overview" section rather than being dropped.
  */
 export function parseBrief(content: string): ParsedBrief {
-  const lines = content.split(/\r?\n/).map((line) => line.trim());
+  const lines = content
+    .split(/\r?\n/)
+    .filter(isVisibleLine)
+    .map((line) => line.trim());
   const first = lines.findIndex(Boolean);
   if (first === -1) return { headline: "", sections: [] };
   const headline = strip(lines[first]);
