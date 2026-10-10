@@ -46,11 +46,6 @@ function EventItem({ event, country }: { event: MarketEvent; country: string }) 
           {severity.label}
         </span>
         <span className="event-type">{meta.label}</span>
-        {event.is_demo && (
-          <span className="chip-tag" title="Measured against demo historical data">
-            demo
-          </span>
-        )}
         <time className="event-time" dateTime={event.detected_at} title={formatDateTime(event.detected_at)}>
           {formatRelativeTime(event.detected_at)}
         </time>

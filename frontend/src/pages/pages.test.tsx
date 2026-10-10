@@ -162,7 +162,7 @@ describe("BriefPage", () => {
     expect(screen.getByText(/A price fell/)).toBeInTheDocument();
   });
 
-  it("says why a template was used and flags demo data and rejected claims", () => {
+  it("says why a template was used and lists rejected claims, without any demo wording", () => {
     mockBrief(
       report({
         content: TEMPLATE,
@@ -172,7 +172,7 @@ describe("BriefPage", () => {
     );
     renderAt("/markets/1/brief", <BriefPage />, "/markets/:id/brief");
     expect(screen.getByText(/Template brief/)).toBeInTheDocument();
-    expect(screen.getByText("Includes demo data")).toBeInTheDocument();
+    expect(screen.queryByText(/demo/i)).not.toBeInTheDocument();
     expect(screen.getByRole("note")).toHaveTextContent(/not in the data.*Rejected: October 9/);
   });
 

@@ -30,8 +30,8 @@ export function SectionPage({
         title="Market not found"
         hint="It may have been deleted, or it belongs to another account."
         action={
-          <Link to="/markets" className="button-link">
-            Back to your markets
+          <Link to="/" className="button-link">
+            Back to home
           </Link>
         }
       />
@@ -47,16 +47,7 @@ export function SectionPage({
           </p>
           <h1 className="page-title">{title}</h1>
           <p className="lede">{intro}</p>
-          {scan && (
-            <p className="section-meta">
-              Based on the scan from {formatRelativeTime(scan.scanned_at)}
-              {scan.is_demo && (
-                <span className="badge badge-demo" title="This scan was generated from a real one to demonstrate history.">
-                  Demo data
-                </span>
-              )}
-            </p>
-          )}
+          {scan && <p className="section-meta">Based on the scan from {formatRelativeTime(scan.scanned_at)}</p>}
         </div>
       </section>
       {children}

@@ -13,10 +13,10 @@ import type {
   SuggestRequest,
 } from "../types";
 import {
+  getRecommendations,
   getAlertRules,
   getAlerts,
   getAlertsSummary,
-  getCredits,
   getLatestScanJob,
   getReplay,
   getScanJob,
@@ -50,7 +50,7 @@ export const queryKeys = {
   section: (id: number, name: string, params?: unknown) => ["section", id, name, params ?? null] as const,
 };
 
-/** Everything a scan or demo-history change can affect, so section pages refetch after a scan. */
+/** Everything a scan can affect, so section pages refetch after a scan. */
 const sectionKey = (id: number) => ["section", id] as const;
 
 const isValidId = (id: number) => Number.isInteger(id) && id > 0;
@@ -180,17 +180,13 @@ export const useShelf = sectionQuery("shelf", getShelf);
 export const useSupply = sectionQuery("supply", getSupply);
 export const usePricing = sectionQuery("pricing", getPricing);
 export const useOpportunities = sectionQuery("opportunities", getOpportunities);
+export const useRecommendations = sectionQuery("recommendations", getRecommendations);
 export function useReports(id: number) {
   const { request } = useAuth();
   return useQuery({ queryKey: queryKeys.section(id, "reports"), queryFn: () => getReports(request, id), enabled: isValidId(id) });
 }
 
 // ---------------------------------------------------------------- operations
-
-export function useCredits() {
-  const { request } = useAuth();
-  return useQuery({ queryKey: ["credits"] as const, queryFn: () => getCredits(request), staleTime: 10_000 });
-}
 
 const ACTIVE = new Set(["queued", "running"]);
 export const isJobActive = (job: ScanJob | null | undefined) => Boolean(job && ACTIVE.has(job.status));
@@ -214,7 +210,6 @@ export function useStartScanJob(id: number) {
     mutationFn: (options: { force?: boolean; refresh?: boolean } = {}) => startScanJob(request, id, options),
     onSuccess: (job) => {
       queryClient.setQueryData(queryKeys.section(id, "scan-job"), job);
-      void queryClient.invalidateQueries({ queryKey: ["credits"] });
     },
   });
 }
@@ -225,7 +220,6 @@ export function useRefreshAfterScan(id: number) {
   return () => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(id) });
     void queryClient.invalidateQueries({ queryKey: ["section", id] });
-    void queryClient.invalidateQueries({ queryKey: ["credits"] });
     void queryClient.invalidateQueries({ queryKey: ["alerts-summary"] });
   };
 }

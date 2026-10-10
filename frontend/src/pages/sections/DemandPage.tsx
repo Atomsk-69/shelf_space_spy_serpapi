@@ -5,6 +5,7 @@ import { useDemand } from "../../api/hooks";
 import { Panel } from "../../components/Panel";
 import { SectionPage } from "../../components/SectionPage";
 import { EmptyState, Loading, QueryBody } from "../../components/states";
+import { ColumnChart } from "../../components/charts/Bars";
 import { Badge, LowVolumeBadge } from "../../components/ui/Badge";
 import { InfoTip } from "../../components/ui/InfoTip";
 import { buildTrendChart, PRIOR_WEEKS, RECENT_WEEKS } from "../../lib/demand";
@@ -151,6 +152,19 @@ function DemandCard({ item }: { item: DemandSection["keywords"][number] }) {
               </dd>
             </div>
           </dl>
+          {signal.recent_avg != null && signal.prior_avg != null && (
+            <ColumnChart
+              height={150}
+              data={[
+                { name: `Prior ${PRIOR_WEEKS} weeks`, value: signal.prior_avg, color: "var(--viz-other)" },
+                { name: `Last ${RECENT_WEEKS} complete weeks`, value: signal.recent_avg },
+              ]}
+              format={(value) => formatDecimal(value)}
+              unit="average interest"
+              valueHeader="Average interest"
+              label={`Average search interest for ${item.keyword}: prior ${PRIOR_WEEKS} weeks versus last ${RECENT_WEEKS} complete weeks`}
+            />
+          )}
           <TrendChart item={item} />
           {signal.caveats.length > 0 && (
             <ul className="bullet-list caveat-list">

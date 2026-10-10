@@ -569,3 +569,31 @@ class ReplayScan(BaseModel):
 
 class ReplaySection(BaseModel):
     scans: list[ReplayScan]
+
+
+class EvidenceItem(BaseModel):
+    label: str
+    value: Any = None
+    kind: str  # pct | pct_signed | price | score | count | text
+
+
+class Recommendation(BaseModel):
+    id: str
+    kind: str  # investigate | collect_data | deprioritize | test_price | monitor_competitor | watch_entrant | check_exit
+    priority: str  # high | medium | low
+    probe: str | None = None
+    title: str
+    summary: str
+    evidence: list[EvidenceItem]
+    action: str
+    confidence: str
+    limitations: list[str]
+    uses_demo_data: bool
+    source: str  # opportunity | pricing | event | data
+
+
+class RecommendationsSection(BaseModel):
+    has_data: bool
+    scan: ScanRef | None = None
+    items: list[Recommendation]
+    notes: list[str]

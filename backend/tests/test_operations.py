@@ -51,7 +51,7 @@ def test_dry_run_reports_budget_and_the_cap_is_a_hard_limit_that_force_cannot_by
 
     calls_before = len(fake_serpapi.calls)
     refused = client.post("/api/markets/1/scan?force=true&refresh=true", headers=auth_headers)
-    assert refused.status_code == 429 and "remain" in refused.json()["detail"]
+    assert refused.status_code == 429 and "daily scan limit" in refused.json()["detail"] and "credit" not in refused.json()["detail"].lower()
     assert len(fake_serpapi.calls) == calls_before  # nothing was spent
     refused_job = client.post("/api/markets/1/scan-jobs", headers=auth_headers, json={"force": True, "refresh": True})
     assert refused_job.status_code == 429

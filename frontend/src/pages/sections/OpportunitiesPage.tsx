@@ -1,7 +1,9 @@
 import { useParams } from "react-router-dom";
 
-import { useOpportunities } from "../../api/hooks";
+import { useMarket, useOpportunities } from "../../api/hooks";
 import { OpportunityCards } from "../../components/dashboard/OpportunityCards";
+import { RecommendedActions } from "../../components/RecommendedActions";
+import { OpportunityScoreBars } from "../../components/charts/MarketCharts";
 import { OpportunityScatter } from "../../components/dashboard/OpportunityScatter";
 import { Panel } from "../../components/Panel";
 import { SectionPage } from "../../components/SectionPage";
@@ -11,6 +13,7 @@ import { EmptyState, Loading, QueryBody } from "../../components/states";
 export default function OpportunitiesPage() {
   const id = parseMarketId(useParams().id);
   const opportunities = useOpportunities(id);
+  const country = useMarket(id).data?.country ?? "";
   const empty = (
     <EmptyState
       title="No opportunities scored yet"
@@ -26,6 +29,7 @@ export default function OpportunitiesPage() {
       scan={opportunities.data?.scan}
     >
       <div className="dash-grid">
+        <RecommendedActions marketId={id} country={country} />
         <Panel label="DEMAND × SUPPLY" title="Probe matrix" className="span-7">
           <QueryBody
             query={opportunities}
@@ -37,7 +41,12 @@ export default function OpportunitiesPage() {
             {(value) => <OpportunityScatter opportunities={value.items} />}
           </QueryBody>
         </Panel>
-        <Panel label="RANKED" title="Ranked probes" className="span-5">
+        <Panel label="SCORES" title="Score by probe" className="span-5">
+          <QueryBody query={opportunities} loading={<Loading height={260} />} isEmpty={(v) => v.items.length === 0} empty={empty}>
+            {(value) => <OpportunityScoreBars opportunities={value.items} />}
+          </QueryBody>
+        </Panel>
+        <Panel label="RANKED" title="Ranked probes" className="span-12">
           <QueryBody query={opportunities} loading={<Loading rows={8} />} isEmpty={(v) => v.items.length === 0} empty={empty}>
             {(value) => <OpportunityCards opportunities={value.items} />}
           </QueryBody>

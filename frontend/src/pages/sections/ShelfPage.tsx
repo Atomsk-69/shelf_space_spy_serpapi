@@ -1,12 +1,13 @@
 import { useParams } from "react-router-dom";
 
 import { useMarket, usePricing, useReplay, useShelf, useSupply } from "../../api/hooks";
+import { PriceBandBars, SupplyBars } from "../../components/charts/MarketCharts";
 import { ShelfHeatmap } from "../../components/ShelfHeatmap";
 import { ShelfShareBars } from "../../components/dashboard/ShelfShareBars";
 import { Panel } from "../../components/Panel";
 import { SectionPage } from "../../components/SectionPage";
 import { EmptyState, Loading, QueryBody } from "../../components/states";
-import { DemoBadge, HistoryBadge } from "../../components/ui/Badge";
+import { HistoryBadge } from "../../components/ui/Badge";
 import { InfoTip } from "../../components/ui/InfoTip";
 import { DASH, formatDateTime, formatPct, formatPrice, formatSignedPct } from "../../lib/format";
 import { parseMarketId } from "../../lib/ids";
@@ -141,14 +142,8 @@ export default function ShelfPage() {
                 changes ? (
                   <>
                     <p className="data-note">
-                      Compared with the scan from {previousScan ? formatDateTime(previousScan.scanned_at) : "the previous scan"}
-                      {previousScan?.is_demo && (
-                        <>
-                          {" "}
-                          <DemoBadge label="Demo data" />
-                        </>
-                      )}
-                      . Percentage points of observed visibility.
+                      Compared with the scan from {previousScan ? formatDateTime(previousScan.scanned_at) : "the previous scan"}. Percentage
+                      points of observed visibility.
                     </p>
                     <div className="mover-grid">
                       <Movers title="Gaining visibility" rows={changes.gainers} tone="up" />
@@ -173,40 +168,43 @@ export default function ShelfPage() {
         <Panel label="SUPPLY" title="Market structure per probe" className="span-12">
           <QueryBody query={supply} loading={<Loading rows={4} />} isEmpty={(v) => !v.has_data} empty={noScan}>
             {(value) => (
-              <div className="table-scroll">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Probe</th>
-                      <th className="num">Listings</th>
-                      <th className="num">Distinct products</th>
-                      <th className="num">Brands</th>
-                      <th className="num">Retailers</th>
-                      <th className="num">Top-3 share</th>
-                      <th className="num">Density</th>
-                      <th className="num">Product growth</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {value.probes.map((probe) => (
-                      <tr key={probe.keyword}>
-                        <th scope="row">{probe.keyword}</th>
-                        <td className="num">{probe.results}</td>
-                        <td className="num">{probe.skus}</td>
-                        <td className="num">{probe.brands}</td>
-                        <td className="num">{probe.retailers}</td>
-                        <td className="num">{formatPct(probe.top3_share * 100, 0)}</td>
-                        <td className="num">{probe.density.toFixed(2)}</td>
-                        <td className="num">{probe.sku_growth_pct === null ? DASH : formatSignedPct(probe.sku_growth_pct)}</td>
+              <>
+                <SupplyBars probes={value.probes} />
+                <div className="table-scroll">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Probe</th>
+                        <th className="num">Listings</th>
+                        <th className="num">Distinct products</th>
+                        <th className="num">Brands</th>
+                        <th className="num">Retailers</th>
+                        <th className="num">Top-3 share</th>
+                        <th className="num">Density</th>
+                        <th className="num">Product growth</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <p className="data-note">
-                  Density is distinct products per listing: close to 1 means every slot is a different product. Growth compares with{" "}
-                  {value.compared_with ? "an earlier scan" : "no earlier scan (none yet)"}.
-                </p>
-              </div>
+                    </thead>
+                    <tbody>
+                      {value.probes.map((probe) => (
+                        <tr key={probe.keyword}>
+                          <th scope="row">{probe.keyword}</th>
+                          <td className="num">{probe.results}</td>
+                          <td className="num">{probe.skus}</td>
+                          <td className="num">{probe.brands}</td>
+                          <td className="num">{probe.retailers}</td>
+                          <td className="num">{formatPct(probe.top3_share * 100, 0)}</td>
+                          <td className="num">{probe.density.toFixed(2)}</td>
+                          <td className="num">{probe.sku_growth_pct === null ? DASH : formatSignedPct(probe.sku_growth_pct)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p className="data-note">
+                    Density is distinct products per listing: close to 1 means every slot is a different product. Growth compares with{" "}
+                    {value.compared_with ? "an earlier scan" : "no earlier scan (none yet)"}.
+                  </p>
+                </div>
+              </>
             )}
           </QueryBody>
         </Panel>
@@ -220,7 +218,6 @@ export default function ShelfPage() {
           >
             {(value) => {
               const overall = value.overall!;
-              const total = overall.bands.budget + overall.bands.mid + overall.bands.premium || 1;
               return (
                 <>
                   <dl className="opportunity-facts">
@@ -239,21 +236,7 @@ export default function ShelfPage() {
                       <dd>{formatPct(overall.discount_rate * 100, 0)}</dd>
                     </div>
                   </dl>
-                  <div
-                    className="band-bar"
-                    role="img"
-                    aria-label={`Budget ${overall.bands.budget}, core ${overall.bands.mid}, premium ${overall.bands.premium} listings`}
-                  >
-                    <span className="band band-budget" style={{ width: `${(overall.bands.budget / total) * 100}%` }}>
-                      Budget {overall.bands.budget}
-                    </span>
-                    <span className="band band-mid" style={{ width: `${(overall.bands.mid / total) * 100}%` }}>
-                      Core {overall.bands.mid}
-                    </span>
-                    <span className="band band-premium" style={{ width: `${(overall.bands.premium / total) * 100}%` }}>
-                      Premium {overall.bands.premium}
-                    </span>
-                  </div>
+                  <PriceBandBars probes={value.probes} />
                   <div className="table-scroll table-view">
                     <table>
                       <thead>

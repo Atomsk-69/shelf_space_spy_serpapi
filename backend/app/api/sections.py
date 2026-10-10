@@ -17,6 +17,7 @@ from app.schemas import (
     OpportunitiesSection,
     PricingSection,
     ProductHistory,
+    RecommendationsSection,
     ReplaySection,
     ReportsSection,
     ScansResponse,
@@ -125,3 +126,9 @@ def reports(market_id: int, user: CurrentUser) -> dict[str, Any]:
 @router.get("/replay", response_model=ReplaySection)
 def replay(market_id: int, user: CurrentUser) -> dict[str, Any]:
     return sections.replay_section(_market(market_id, user))
+
+
+@router.get("/recommendations", response_model=RecommendationsSection)
+def recommendations(market_id: int, user: CurrentUser, scan_id: ScanId = None) -> dict[str, Any]:
+    """Deterministic recommended actions with their evidence. Read-only; spends no SerpAPI credits."""
+    return _replay(sections.recommendations_section, _market(market_id, user), scan_id)

@@ -141,8 +141,7 @@ def enforce_scan_rules(base: dict[str, Any], estimate: dict[str, Any], *, force:
     needed = estimate["estimated_credits"]
     if base["daily_budget"] and needed and base["credits_used_today"] + needed > base["daily_budget"]:
         raise BudgetExceededError(
-            f"This scan needs about {needed} SerpAPI credit(s) but only {base['budget_remaining']} of today's "
-            f"{base['daily_budget']} remain. The budget resets at midnight UTC; cached data is still available.",
+            "The daily scan limit has been reached. It resets at midnight UTC; stored data is still available.",
             minutes_since_last=base["minutes_since_last_scan"] or 0.0,
             estimate=estimate,
         )
@@ -150,8 +149,7 @@ def enforce_scan_rules(base: dict[str, Any], estimate: dict[str, Any], *, force:
         minutes = base["minutes_since_last_scan"] or 0.0
         raise ScanGuardError(
             f"The last live scan was {minutes:.0f} minute(s) ago (minimum interval "
-            f"{settings.scan_min_interval_minutes} minutes). Re-run with force=true to scan anyway; "
-            f"estimated cost {needed} SerpAPI credit(s).",
+            f"{settings.scan_min_interval_minutes} minutes). Re-run with force=true to scan anyway.",
             minutes_since_last=minutes,
             estimate=estimate,
         )
@@ -178,7 +176,7 @@ async def _run_scan(
     if dry_run:
         return {
             **base, "dry_run": True, "scanned_at": None, "products_observed": 0,
-            "message": f"Dry run: this scan would use about {estimate['estimated_credits']} SerpAPI credit(s).",
+            "message": "Dry run: nothing was fetched or saved.",
         }
     enforce_scan_rules(base, estimate, force=force)
     total_steps = estimate["shopping_calls"] + estimate["trends_calls"] + 1
@@ -242,9 +240,9 @@ async def _run_scan(
     alerts_created = await asyncio.to_thread(evaluate_alerts, market["id"], shopping_scan_id)
     step("Done")
     message = (
-        "Scan replayed from the response cache (0 SerpAPI credits); pass refresh=true for fresh data."
+        "Scan completed from recently cached results; pass refresh=true for fresh data."
         if credits == 0 else
-        f"Live scan completed through SerpAPI ({credits} credit(s))."
+        "Live scan completed."
     )
     return {
         **base,

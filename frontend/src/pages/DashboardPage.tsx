@@ -1,7 +1,9 @@
 import { Link, useParams } from "react-router-dom";
 
-import { useDashboard, useLatestReport, useMarket } from "../api/hooks";
+import { useDashboard, useLatestReport, useMarket, usePricing } from "../api/hooks";
 import { isNotFound } from "../api/errors";
+import { ChangeTypeBars, OpportunityScoreBars, PriceBandBars } from "../components/charts/MarketCharts";
+import { ShelfShareBars } from "../components/dashboard/ShelfShareBars";
 import { CompetitorTable } from "../components/dashboard/CompetitorTable";
 import { EventsFeed } from "../components/dashboard/EventsFeed";
 import { KpiRow, KpiRowSkeleton } from "../components/dashboard/KpiRow";
@@ -9,7 +11,7 @@ import { OpportunityScatter } from "../components/dashboard/OpportunityScatter";
 import { SignalList, SignalsHelp } from "../components/dashboard/SignalList";
 import { Panel } from "../components/Panel";
 import { EmptyState, ErrorState, Loading, QueryBody, Skeleton } from "../components/states";
-import { Badge, DemoBadge, HistoryBadge } from "../components/ui/Badge";
+import { Badge, HistoryBadge } from "../components/ui/Badge";
 import { countryLabel, formatRelativeTime } from "../lib/format";
 import { parseMarketId } from "../lib/ids";
 import { findSection, parseBrief } from "../lib/brief";
@@ -22,8 +24,8 @@ function NotFound() {
       title="Market not found"
       hint="It may have been deleted, or it belongs to another account."
       action={
-        <Link to="/markets" className="button-link">
-          Back to your markets
+        <Link to="/" className="button-link">
+          Back to home
         </Link>
       }
     />
@@ -56,7 +58,6 @@ function BriefSummary({ report, marketId }: { report: Report | null | undefined;
         <Badge tone={report.source === "llm" ? "info" : "neutral"} icon={report.source === "llm" ? "✦" : "▤"}>
           {report.source === "llm" ? "AI narrated" : "Template"}
         </Badge>
-        {report.diagnostics?.data_includes_demo && <DemoBadge label="Includes demo data" />}
         <span className="muted-ink">Written {formatRelativeTime(report.created_at)}</span>
       </div>
       <p className="brief-headline">{brief.headline}</p>
@@ -84,6 +85,7 @@ function MarketDashboard({ id }: { id: number }) {
   const market = useMarket(id);
   const dashboard = useDashboard(id);
   const latestReport = useLatestReport(id);
+  const pricing = usePricing(id);
 
   if (!Number.isInteger(id) || id <= 0 || isNotFound(market.error) || isNotFound(dashboard.error)) return <NotFound />;
 
@@ -95,8 +97,8 @@ function MarketDashboard({ id }: { id: number }) {
 
   return (
     <>
-      <section className="page-intro">
-        <div>
+      <section className="overview-hero">
+        <div className="overview-hero-copy">
           {info ? (
             <>
               <p className="card-label">
@@ -114,6 +116,11 @@ function MarketDashboard({ id }: { id: number }) {
                 {info.competitors.length} competitor{info.competitors.length === 1 ? "" : "s"} across {info.keywords.length} search probe
                 {info.keywords.length === 1 ? "" : "s"}.
               </p>
+              <ul className="probe-pills" aria-label="Search probes">
+                {info.keywords.map((keyword) => (
+                  <li key={keyword}>{keyword}</li>
+                ))}
+              </ul>
             </>
           ) : market.error ? (
             <ErrorState error={market.error} title="Couldn't load this market" onRetry={() => void market.refetch()} />
@@ -121,10 +128,15 @@ function MarketDashboard({ id }: { id: number }) {
             <Loading label="Loading market…" rows={3} />
           )}
           <div className="badge-row page-badges">
-            {data?.has_demo_history && <DemoBadge label="Demo historical data" />}
             {data && data.scan_count > 0 && data.scan_count < 3 && <HistoryBadge scans={data.scan_count} />}
           </div>
         </div>
+        <nav className="quick-links" aria-label="Jump to">
+          <Link to={`/markets/${id}/changes`}>Changes</Link>
+          <Link to={`/markets/${id}/opportunities`}>Opportunities</Link>
+          <Link to={`/markets/${id}/shelf`}>Shelf</Link>
+          <Link to={`/markets/${id}/brief`}>Weekly brief</Link>
+        </nav>
       </section>
 
       {noScansYet && (
@@ -187,6 +199,50 @@ function MarketDashboard({ id }: { id: number }) {
             }
           >
             {() => <SignalList signals={signals} marketId={id} />}
+          </QueryBody>
+        </Panel>
+
+        <Panel id="shelf-share-chart" label="SHELF" title="Observed shelf share" className="span-6">
+          <QueryBody
+            query={dashboard}
+            loading={<Loading rows={6} />}
+            isEmpty={(value) => value.shelf_share.length === 0}
+            empty={<EmptyState title="No shelf data yet" hint="Run a scan to see which brands hold the visible positions." />}
+          >
+            {(value) => <ShelfShareBars entries={value.shelf_share} />}
+          </QueryBody>
+        </Panel>
+
+        <Panel id="score-chart" label="OPPORTUNITIES" title="Score by probe" className="span-6">
+          <QueryBody
+            query={dashboard}
+            loading={<Skeleton height={260} />}
+            isEmpty={(value) => value.opportunities.length === 0}
+            empty={<EmptyState title="No scores yet" hint="Scores appear after a scan collects shelf and Trends data." />}
+          >
+            {(value) => <OpportunityScoreBars opportunities={value.opportunities} />}
+          </QueryBody>
+        </Panel>
+
+        <Panel id="change-chart" label="CHANGES" title="Recent changes by type" className="span-5">
+          <QueryBody
+            query={dashboard}
+            loading={<Loading rows={5} />}
+            isEmpty={(value) => value.events.length === 0}
+            empty={<EmptyState title="No changes yet" hint="Change events need at least two scans to compare." />}
+          >
+            {(value) => <ChangeTypeBars events={value.events} />}
+          </QueryBody>
+        </Panel>
+
+        <Panel id="price-chart" label="PRICING" title="Price bands by probe" className="span-7">
+          <QueryBody
+            query={pricing}
+            loading={<Skeleton height={200} />}
+            isEmpty={(value) => !value.has_data}
+            empty={<EmptyState title="No prices yet" hint="Prices appear once a scan has priced listings." />}
+          >
+            {(value) => <PriceBandBars probes={value.probes} />}
           </QueryBody>
         </Panel>
 

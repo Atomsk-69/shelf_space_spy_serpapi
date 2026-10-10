@@ -8,7 +8,7 @@ import type { Opportunity } from "../types";
 import { OpportunityCards } from "./dashboard/OpportunityCards";
 import { EventTimeline } from "./EventTimeline";
 import { ShelfHeatmap } from "./ShelfHeatmap";
-import { Badge, ConfidenceBadge, DemoBadge, InferredBadge, SeverityBadge, UnstableBadge } from "./ui/Badge";
+import { Badge, ConfidenceBadge, InferredBadge, SeverityBadge, UnstableBadge } from "./ui/Badge";
 import { Drawer } from "./ui/Drawer";
 import { InfoTip } from "./ui/InfoTip";
 import { buildHeatmap } from "../lib/shelf";
@@ -20,7 +20,6 @@ describe("badges", () => {
         <SeverityBadge level="high" />
         <ConfidenceBadge level="low" />
         <ConfidenceBadge level={undefined} />
-        <DemoBadge />
         <InferredBadge />
         <UnstableBadge overlap={0.12} />
         <Badge>Plain</Badge>
@@ -30,7 +29,6 @@ describe("badges", () => {
       "High severity",
       "Low confidence",
       "Confidence unknown",
-      "Demo data",
       "Inferred brand",
       "Unstable shelf (12% overlap)",
       "Plain",
@@ -96,11 +94,10 @@ describe("Drawer", () => {
 describe("EventTimeline", () => {
   it("shows severity and confidence separately and reports the selected event", async () => {
     const onSelect = vi.fn();
-    const chosen = event({ id: 4, severity: "high", confidence: "low", summary: "Rank jumped.", is_demo: true });
+    const chosen = event({ id: 4, severity: "high", confidence: "low", summary: "Rank jumped." });
     render(<EventTimeline events={[chosen]} country="US" onSelect={onSelect} />);
     expect(screen.getByText("High severity")).toBeInTheDocument();
     expect(screen.getByText("Low confidence")).toBeInTheDocument();
-    expect(screen.getByText("Demo data")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /Rank jumped/ }));
     expect(onSelect).toHaveBeenCalledWith(chosen);
   });
@@ -148,5 +145,77 @@ describe("ShelfHeatmap", () => {
     expect(screen.getAllByText("—")).toHaveLength(2);
     expect(screen.getAllByText(/Unstable shelf/)).toHaveLength(1);
     expect(screen.getByText(/not that it has 0%/)).toBeInTheDocument();
+  });
+});
+
+describe("RecommendedActions", () => {
+  const item = {
+    id: "investigate:widget:0",
+    kind: "investigate",
+    priority: "high" as const,
+    probe: "widget",
+    title: "Investigate “widget”",
+    summary: "Golden: search interest is up.",
+    evidence: [
+      { label: "Opportunity score", value: 82, kind: "score" as const },
+      { label: "Search interest change", value: 18, kind: "pct_signed" as const },
+      { label: "Median", value: 30, kind: "price" as const },
+    ],
+    action: "Research this segment.",
+    confidence: "low",
+    limitations: ["Only 2 scans of history."],
+    uses_demo_data: true,
+    source: "opportunity",
+  };
+
+  async function renderWith(data: unknown, error: unknown = null) {
+    const hooks = await import("../api/hooks");
+    vi.spyOn(hooks, "useRecommendations").mockReturnValue({ data, error, isFetching: false, refetch: vi.fn() } as never);
+    const { RecommendedActions } = await import("./RecommendedActions");
+    return render(<RecommendedActions marketId={1} country="US" />);
+  }
+
+  it("shows the action with its evidence, confidence and limitations, says it is a hypothesis, and never mentions demo data", async () => {
+    await renderWith({ has_data: true, scan: null, items: [item], notes: [] });
+    expect(screen.getByText("Investigate")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Investigate “widget”/ })).toBeInTheDocument();
+    expect(screen.getByText("82/100")).toBeInTheDocument();
+    expect(screen.getByText("+18.0%")).toBeInTheDocument();
+    expect(screen.getByText("$30.00")).toBeInTheDocument();
+    expect(screen.getByText("Low confidence")).toBeInTheDocument();
+    expect(screen.queryByText(/demo/i)).not.toBeInTheDocument();
+    expect(screen.getByText("Research this segment.")).toBeInTheDocument();
+    expect(screen.getByText(/Limitations \(1\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Hypotheses, not guaranteed business advice/)).toBeInTheDocument();
+  });
+
+  it("shows an empty state and an error state instead of nothing", async () => {
+    const { unmount } = await renderWith({ has_data: false, scan: null, items: [], notes: [] });
+    expect(screen.getByText("No recommendations yet")).toBeInTheDocument();
+    unmount();
+    await renderWith(undefined, new Error("boom"));
+    expect(screen.getByRole("alert")).toHaveTextContent(/couldn't load recommended actions/i);
+  });
+});
+
+describe("stored demo wording", () => {
+  it("is hidden in the opportunity evidence drawer and its caveat count", async () => {
+    const stored = {
+      keyword: "widget",
+      score: 60,
+      label: "Attractive",
+      demand_growth: 5,
+      supply_growth: 1,
+      reasons: ["Search interest up 5%."],
+      caveats: ["Includes demo historical data.", "Only 1 scan of history."],
+      components: {},
+      confidence: { level: "medium", factors: {} },
+    } as unknown as Opportunity;
+    render(<OpportunityCards opportunities={[stored]} />);
+    expect(screen.getByRole("button", { name: /Evidence · 1 caveat →/ })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /Evidence/ }));
+    const drawer = screen.getByRole("dialog", { name: "widget" });
+    expect(drawer).toHaveTextContent(/Only 1 scan of history/);
+    expect(drawer.textContent?.toLowerCase()).not.toContain("demo");
   });
 });

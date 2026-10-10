@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 
-import { isJobActive, useCredits, useLatestScanJob, useRefreshAfterScan, useStartScanJob } from "../api/hooks";
+import { isJobActive, useLatestScanJob, useRefreshAfterScan, useStartScanJob } from "../api/hooks";
 
 /** Everything the shell needs to run and show a background scan for one market. */
 export function useScanController(marketId: number) {
   const job = useLatestScanJob(marketId);
   const start = useStartScanJob(marketId);
-  const credits = useCredits();
   const refreshAfterScan = useRefreshAfterScan(marketId);
   const [dismissedJob, setDismissedJob] = useState<number | null>(null);
   const active = isJobActive(job.data);
@@ -23,7 +22,6 @@ export function useScanController(marketId: number) {
     job: job.data ?? null,
     active,
     busy: active || start.isPending,
-    credits: credits.data,
     startError: start.isError ? start.error : null,
     clearStartError: () => start.reset(),
     dismissedJob,

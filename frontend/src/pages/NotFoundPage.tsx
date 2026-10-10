@@ -8,8 +8,8 @@ export default function NotFoundPage() {
       title="Page not found"
       hint="That address doesn't match anything in Shelf Space Spy."
       action={
-        <Link to="/markets" className="button-link">
-          Go to your markets
+        <Link to="/" className="button-link">
+          Back to the home page
         </Link>
       }
     />

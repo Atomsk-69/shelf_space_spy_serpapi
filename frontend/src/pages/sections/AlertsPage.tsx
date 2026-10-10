@@ -93,7 +93,7 @@ export default function AlertsPage() {
       id={id}
       label="ALERTS"
       title="What needs your attention"
-      intro="Alerts come from detected changes after each live scan. A rule only fires for events at or above its confidence and severity, and never for demo data."
+      intro="Alerts come from detected changes after each live scan. A rule only fires for events at or above its confidence and severity."
     >
       <div className="dash-grid">
         <Panel

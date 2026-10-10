@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useAlertsSummary } from "../api/hooks";
 import { useAuth } from "../auth/AuthProvider";
 import { USE_MOCK } from "../api/client";
+import { isVisibleLine } from "../lib/text";
 import { MarketNav } from "./MarketNav";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -14,7 +15,7 @@ export function Sidebar({ marketId, open, onNavigate }: { marketId: number; open
   return (
     <aside id="app-sidebar" className={open ? "sidebar is-open" : "sidebar"} aria-label="Main">
       <div className="sidebar-brand">
-        <Link to="/markets" className="brand-link" onClick={onNavigate}>
+        <Link to="/" className="brand-link" onClick={onNavigate} title="Back to the home page">
           <span className="brand-mark" aria-hidden="true">
             ◫
           </span>
@@ -22,15 +23,6 @@ export function Sidebar({ marketId, open, onNavigate }: { marketId: number; open
         </Link>
         {USE_MOCK && <span className="ui-badge tone-info">Mock data</span>}
       </div>
-
-      <nav className="sidebar-group" aria-label="Workspace" onClick={onNavigate}>
-        <Link to="/markets" className="side-link">
-          All markets
-        </Link>
-        <Link to="/markets/new" className="side-link">
-          New market
-        </Link>
-      </nav>
 
       {hasMarket && (
         <div className="sidebar-group" onClick={onNavigate}>
@@ -41,7 +33,7 @@ export function Sidebar({ marketId, open, onNavigate }: { marketId: number; open
 
       <div className="sidebar-foot">
         <ThemeToggle />
-        {user && <p className="sidebar-user">{user.name}</p>}
+        {user && <p className="sidebar-user">{isVisibleLine(user.name) ? user.name : "Signed in"}</p>}
         <button type="button" className="button-secondary button-small" onClick={() => logout()}>
           Log out
         </button>

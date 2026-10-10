@@ -69,7 +69,7 @@ describe("EventsFeed", () => {
 });
 
 describe("ShelfShareBars", () => {
-  it("labels every bar and marks the user's brand", () => {
+  it("is a bar chart whose table view repeats every brand and marks yours", () => {
     render(
       <ShelfShareBars
         entries={[
@@ -78,9 +78,10 @@ describe("ShelfShareBars", () => {
         ]}
       />,
     );
-    expect(screen.getByText("Mine")).toBeInTheDocument();
-    expect(screen.getByText("you")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /Observed visibility share by brand/ })).toBeInTheDocument();
+    expect(screen.getByText("Mine (you)")).toBeInTheDocument();
     expect(screen.getByText("40.0%")).toBeInTheDocument();
+    expect(screen.getByText("Rival")).toBeInTheDocument();
     expect(screen.getByText(/not sales share/)).toBeInTheDocument();
   });
 });
