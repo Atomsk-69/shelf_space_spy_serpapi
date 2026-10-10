@@ -1,44 +1,42 @@
+"""Demo account and example markets.
+
+Example markets are plain configuration (``DEMO_MARKET_*`` in backend/.env). The code
+treats them exactly like markets a user creates; nothing elsewhere special-cases them.
+"""
+
+from typing import Any
+
+from app import repo
+from app.core.config import Settings, get_settings
 from app.core.security import hash_password
-from app.core.config import get_settings
-from app.db import get_connection
+from app.schemas import MAX_KEYWORDS
+
+
+def example_markets(settings: Settings) -> list[dict[str, Any]]:
+    """Starter markets for the demo account. Add more entries here to seed more examples."""
+    return [
+        {
+            "name": settings.demo_market_name,
+            "country": settings.demo_market_country.upper(),
+            "category": settings.demo_market_category,
+            "brand_name": settings.demo_brand_name or None,
+            "keywords": settings.market_keywords[:MAX_KEYWORDS],
+            "competitors": settings.competitors,
+        },
+    ]
 
 
 def seed_demo_data() -> None:
-    """Create the single, documented hackathon account and its starter market."""
+    """Create the documented hackathon account and its example markets (idempotent)."""
     settings = get_settings()
-    with get_connection() as connection:
-        user = connection.execute("SELECT id FROM users WHERE email = ?", (settings.demo_user_email,)).fetchone()
-        if user is None:
-            cursor = connection.execute(
-                "INSERT INTO users (email, name, password_hash) VALUES (?, ?, ?)",
-                (settings.demo_user_email, settings.demo_user_name, hash_password(settings.demo_user_password)),
-            )
-            user_id = cursor.lastrowid
-        else:
-            user_id = user["id"]
-
-        market = connection.execute(
-            "SELECT id FROM markets WHERE user_id = ? AND name = ?", (user_id, settings.demo_market_name)
-        ).fetchone()
-        if market is not None:
-            return
-
-        cursor = connection.execute(
-            "INSERT INTO markets (user_id, name, country, category, brand_name) VALUES (?, ?, ?, ?, ?)",
-            (
-                user_id,
-                settings.demo_market_name,
-                settings.demo_market_country,
-                settings.demo_market_category,
-                settings.demo_brand_name,
-            ),
-        )
-        market_id = cursor.lastrowid
-        connection.executemany(
-            "INSERT INTO market_keywords (market_id, keyword) VALUES (?, ?)",
-            [(market_id, keyword) for keyword in settings.market_keywords],
-        )
-        connection.executemany(
-            "INSERT INTO competitors (market_id, brand_name) VALUES (?, ?)",
-            [(market_id, brand) for brand in settings.competitors],
-        )
+    email = settings.demo_user_email.lower()
+    user = repo.get_user_by_email(email)
+    user_id = (
+        int(user["id"]) if user
+        else repo.create_user(email, settings.demo_user_name, hash_password(settings.demo_user_password))
+    )
+    for example in example_markets(settings):
+        if not example["name"] or not example["keywords"]:
+            continue
+        if repo.find_market_by_name(user_id, example["name"]) is None:
+            repo.create_market(user_id, **example)

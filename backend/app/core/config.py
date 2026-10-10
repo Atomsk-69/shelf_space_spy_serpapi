@@ -28,6 +28,16 @@ class Settings(BaseSettings):
     demo_market_keywords: str
     demo_competitors: str
 
+    # Optional LLM narration. Without a key the weekly brief uses the deterministic template.
+    anthropic_api_key: str = ""
+    anthropic_model: str = "claude-sonnet-5-5"
+
+    # SerpAPI credit protection.
+    scan_min_interval_minutes: int = 60
+    suggest_cache_ttl_hours: int = 168
+    serpapi_cache_dir: str = ""
+    trends_date_range: str = "today 12-m"
+
     @property
     def allowed_origins(self) -> list[str]:
         return [origin.strip() for origin in self.frontend_origins.split(",") if origin.strip()]
@@ -43,4 +53,4 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    return Settings()  # type: ignore[call-arg]  # values come from the environment / backend/.env

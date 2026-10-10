@@ -229,3 +229,6 @@ __marimo__/
 # Claude Code local config (agents, hooks, routing rules)
 .claude/
 CLAUDE.md
+
+# TypeScript incremental build state
+*.tsbuildinfo
