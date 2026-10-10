@@ -21,13 +21,13 @@ from app.intelligence.opportunity import incumbent_strength, score_opportunity
 from app.intelligence.pricing import discount_rate_pct, price_stats
 from app.intelligence.shelf_share import collapse_tail, shelf_share
 from app.intelligence.supply import shelf_stability, supply_growth_pct, supply_metrics
-from app.services.normalize import CanonicalIndex, detect_brands
+from app.services.normalize import CanonicalIndex, detect_brands, preferred_names
 
 logger = logging.getLogger(__name__)
 
-HISTORY_SCANS = 4          # earlier shopping scans used for change detection
+HISTORY_SCANS = 6          # earlier shopping scans used for change detection
 REFERENCE_MIN_AGE = timedelta(days=6)  # supply growth compares with a scan about a week older
-PRESENCE_EVENTS = {"NEW_PRODUCT", "NEW_COMPETITOR"}
+PRESENCE_EVENTS = {"NEW_PRODUCT", "NEW_COMPETITOR", "REMOVED_PRODUCT"}
 WINDOW_SCANS = 6           # scans that count as "the analysis window" (demo badge)
 EVENT_WINDOW_DAYS = 30     # events feed horizon, relative to the latest scan
 KPI_WINDOW_DAYS = 7        # "new products this week"
@@ -76,6 +76,32 @@ def normalize_pending(market_id: int) -> int:
             updates.append((brand, bool(match and match.inferred), key, row["id"]))
     repo.update_observation_normalization(updates)
     return len(updates)
+
+
+def renormalize_brands(market_id: int) -> dict[str, int]:
+    """Re-run brand detection over every stored scan of a market with the current rules, then re-analyze.
+
+    Only ``brand`` and ``brand_inferred`` change: raw listings and canonical product keys are untouched, so
+    product history stays intact. Use it after the brand rules improve to fix markets scanned earlier.
+    """
+    market = repo.get_market(market_id)
+    if market is None:
+        return {"scans": 0, "brands_changed": 0}
+    scans = repo.list_scans(market_id, "shopping")
+    by_scan = repo.observations_for_scans([scan["id"] for scan in scans])
+    everything = [row for scan in scans for row in by_scan[scan["id"]]]
+    preferred = preferred_names(everything)
+    updates: list[tuple[str | None, bool, int]] = []
+    for scan in scans:
+        rows = by_scan[scan["id"]]
+        for row, match in zip(rows, detect_brands(rows, known_brands(market), preferred), strict=True):
+            brand, inferred = (match.name, match.inferred) if match else (None, False)
+            if brand != row.get("brand") or inferred != bool(row.get("brand_inferred")):
+                updates.append((brand, inferred, row["id"]))
+    if updates:
+        repo.update_observation_brands(market_id, updates)
+        recompute_market(market_id)
+    return {"scans": len(scans), "brands_changed": len(updates)}
 
 
 # --------------------------------------------------------------------------- analysis
@@ -210,7 +236,7 @@ def event_change_pct(event_type: str, evidence: Row) -> float | None:
     return None
 
 
-def _format_event(event: Row) -> Row:
+def format_event(event: Row) -> Row:
     metadata = dict(event.get("metadata") or {})
     summary = metadata.pop("summary", None)
     caveat = metadata.pop("caveat", None)
@@ -307,10 +333,7 @@ def build_dashboard(market: Row, *, include_low_confidence: bool = False) -> dic
         return _empty_dashboard(report)
     latest = shopping[-1]
     current = repo.observations_for_scan(latest["id"])
-    opportunities = repo.opportunities_for_scan(latest["id"])
-    if not opportunities:
-        analyze_scan(market_id, latest["id"])
-        opportunities = repo.opportunities_for_scan(latest["id"])
+    opportunities = repo.opportunities_for_scan(latest["id"])  # read-only; scans and start-up backfill analyze
 
     latest_at = _parse_time(latest["scanned_at"])
     feed_since = (latest_at - timedelta(days=EVENT_WINDOW_DAYS)).isoformat()
@@ -339,7 +362,7 @@ def build_dashboard(market: Row, *, include_low_confidence: bool = False) -> dic
     }
     return {
         "kpis": kpis,
-        "events": [_format_event(e) for e in events[:MAX_FEED_EVENTS]],
+        "events": [format_event(e) for e in events[:MAX_FEED_EVENTS]],
         "shelf_share": [
             {"brand": row["brand"], "share_pct": row["share_pct"], "is_mine": row["is_mine"], "listings": row["listings"]}
             for row in collapse_tail(share, keep=10)

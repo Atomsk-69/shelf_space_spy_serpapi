@@ -13,8 +13,8 @@ from app.schemas import MAX_KEYWORDS
 
 
 def example_markets(settings: Settings) -> list[dict[str, Any]]:
-    """Starter markets for the demo account. Add more entries here to seed more examples."""
-    return [
+    """Starter markets for the demo account, all taken from configuration."""
+    markets = [
         {
             "name": settings.demo_market_name,
             "country": settings.demo_market_country.upper(),
@@ -24,6 +24,16 @@ def example_markets(settings: Settings) -> list[dict[str, Any]]:
             "competitors": settings.competitors,
         },
     ]
+    if settings.demo_market_2_name and settings.market_2_keywords:
+        markets.append({
+            "name": settings.demo_market_2_name,
+            "country": settings.demo_market_2_country.upper(),
+            "category": settings.demo_market_2_category or settings.demo_market_2_name,
+            "brand_name": settings.demo_market_2_brand or None,
+            "keywords": settings.market_2_keywords[:MAX_KEYWORDS],
+            "competitors": settings.market_2_competitors,
+        })
+    return markets
 
 
 def seed_demo_data() -> None:

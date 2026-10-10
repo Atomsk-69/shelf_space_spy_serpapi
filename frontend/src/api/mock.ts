@@ -426,6 +426,35 @@ function scan(state: MarketState): ScanResult {
   };
 }
 
+// ---------------------------------------------------------------- scan jobs, budget, alerts, replay (mock)
+
+type MockJob = { id: number; market_id: number; created: number; result: ScanResult };
+const mockJobs = new Map<number, MockJob>();
+let nextJobId = 1;
+const JOB_MS = 1400;
+const JOB_STEPS = 4;
+
+function jobView(job: MockJob) {
+  const elapsed = Date.now() - job.created;
+  const done = elapsed >= JOB_MS;
+  return {
+    id: job.id,
+    market_id: job.market_id,
+    status: done ? "succeeded" : "running",
+    force: false,
+    refresh: false,
+    progress_done: done ? JOB_STEPS : Math.min(JOB_STEPS - 1, Math.floor(elapsed / (JOB_MS / JOB_STEPS))),
+    progress_total: JOB_STEPS,
+    message: done ? job.result.message : "Searching Google Shopping",
+    error: null,
+    error_code: null,
+    result: done ? job.result : null,
+    created_at: new Date(job.created).toISOString(),
+    started_at: new Date(job.created).toISOString(),
+    finished_at: done ? new Date(job.created + JOB_MS).toISOString() : null,
+  };
+}
+
 export async function mockApi<T>(path: string, options: RequestInit = {}, token?: string): Promise<T> {
   const method = (options.method ?? "GET").toUpperCase();
   const [pathname] = path.split("?");
@@ -446,12 +475,38 @@ export async function mockApi<T>(path: string, options: RequestInit = {}, token?
   if (method === "POST" && pathname === "/markets") return clone(createMarket(parseBody<MarketCreate>(options))) as T;
   if (method === "POST" && pathname === "/markets/suggest") return clone(suggest(parseBody<SuggestRequest>(options))) as T;
 
+  if (method === "GET" && pathname === "/credits") return clone({ daily_budget: 50, credits_used_today: 0, budget_remaining: 50 }) as T;
+  if (method === "GET" && pathname === "/alerts/summary") return clone({ unread: 0, by_market: {} }) as T;
+
   const match = /^\/markets\/(\d+)(\/.*)?$/.exec(pathname);
   if (match) {
     const state = owned(Number(match[1]));
     const rest = match[2] ?? "";
     if (method === "GET" && rest === "") return clone(state.market) as T;
     if (method === "GET" && rest === "/dashboard") return clone(buildDashboard(state)) as T;
+    if (method === "GET" && rest === "/events") return clone({ items: [], total: 0, limit: 50, offset: 0, hidden_low_confidence: 0, include_low_confidence: false }) as T;
+    if (method === "GET" && rest === "/observations") return clone({ has_data: false, scan: null, items: [], total: 0, limit: 50, offset: 0, keywords: state.market.keywords, brands: [] }) as T;
+    if (method === "GET" && rest === "/opportunities") {
+      const items = buildDashboard(state).opportunities;
+      return clone({ has_data: items.length > 0, scan: null, trends_scan: null, items }) as T;
+    }
+    if (method === "GET" && rest === "/reports") return clone({ items: [...state.reports].reverse() }) as T;
+    if (method === "GET" && ["/demand", "/shelf", "/supply", "/pricing"].includes(rest)) {
+      return clone({ has_data: false, scan: null, keywords: [], overall: rest === "/pricing" ? null : [], by_probe: {}, stability: {}, scans_compared: 0, method: "", probes: [], brands: [], compared_with: null }) as T;
+    }
+    if (method === "POST" && rest === "/scan-jobs") {
+      const running = [...mockJobs.values()].find((job) => job.market_id === state.market.id && Date.now() - job.created < JOB_MS);
+      const job = running ?? { id: nextJobId++, market_id: state.market.id, created: Date.now(), result: scan(state) };
+      mockJobs.set(job.id, job);
+      return clone(jobView(job)) as T;
+    }
+    if (method === "GET" && rest === "/scan-jobs/latest") {
+      const latest = [...mockJobs.values()].filter((job) => job.market_id === state.market.id).at(-1);
+      return clone(latest ? jobView(latest) : null) as T;
+    }
+    if (method === "GET" && rest === "/alerts") return clone({ items: [], total: 0, unread: 0, limit: 20, offset: 0 }) as T;
+    if (method === "GET" && rest === "/alert-rules") return clone([]) as T;
+    if (method === "GET" && rest === "/replay") return clone({ scans: [] }) as T;
     if (method === "POST" && rest === "/scan") return clone(scan(state)) as T;
     if (method === "POST" && rest === "/reports/weekly") {
       const report = buildReport(state);

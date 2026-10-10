@@ -7,7 +7,9 @@ export function ThemeToggle() {
   const id = useId();
   return (
     <span className="theme-toggle">
-      <label htmlFor={id} className="visually-hidden">Color theme</label>
+      <label htmlFor={id} className="visually-hidden">
+        Color theme
+      </label>
       <select
         id={id}
         value={preference}

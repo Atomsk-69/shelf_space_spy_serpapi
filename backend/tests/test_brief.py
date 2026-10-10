@@ -138,3 +138,136 @@ def test_no_api_key_persists_template_report():
     report = generate_weekly_brief({**MARKET, "id": market_id}, DASHBOARD)
     assert report["source"] == "template"
     assert repo.latest_report(market_id)["content"] == report["content"]
+
+
+# --------------------------------------------------------------------------- guard: dates and claims
+
+
+def _inputs_with_period():
+    return build_inputs(MARKET, DASHBOARD)  # period 2026-10-07 .. 2026-10-14
+
+
+def test_dates_matching_the_period_are_accepted_in_every_common_format():
+    from app.ai.brief import unsupported_claims
+
+    inputs = _inputs_with_period()
+    for text in (
+        "Covers 2026-10-07 to 2026-10-14.",
+        "The week of October 7 through October 14, 2026.",
+        "From Oct 7th to 14 October 2026 the shelf moved.",
+        "Written in 2026.",
+    ):
+        assert unsupported_claims(text, inputs) == [], text
+
+
+def test_invented_dates_are_rejected_even_when_the_day_number_appears_elsewhere():
+    from app.ai.brief import unsupported_claims
+
+    inputs = _inputs_with_period()
+    assert unsupported_claims("Prices changed on October 9.", inputs) == ["October 9"]
+    assert unsupported_claims("Since 2026-09-01 demand rose.", inputs) == ["2026-09-01"]
+    # 12 appears in the inputs (12.5%), but "October 12" is not a date the input contains.
+    assert unsupported_claims("On October 12 the shelf shifted.", inputs) == ["October 12"]
+    assert unsupported_claims("Back in October 2025 it was calm.", inputs) == ["2025"]  # a year the input never states
+
+
+def test_spelled_out_figures_and_computed_claims_are_rejected():
+    from app.ai.brief import unsupported_claims
+
+    inputs = _inputs_with_period()
+    assert unsupported_claims("Prices fell by twenty percent.", inputs) == ["twenty percent"]
+    assert unsupported_claims("Visibility doubled this week.", inputs) == ["doubled"]
+    assert unsupported_claims("Demand is up eighteen percent.", inputs) == []  # 18 is in the data, so it is supported
+    assert unsupported_claims("Demand is up thirty percent.", inputs) == ["thirty percent"]
+    assert unsupported_claims("Two products entered.", inputs) == []  # no counted noun: not a figure claim
+    assert unsupported_claims("Demand rose 18%.", inputs) == []
+
+
+def test_llm_text_with_an_invented_date_falls_back_with_a_reason():
+    inputs = _inputs_with_period()
+    content, source, diagnostics = generate_text(inputs, lambda s, u: "Coleman cut prices on October 9.")
+    assert source == "template" and diagnostics["fallback_reason"] == "unsupported_claims"
+    assert diagnostics["attempt_2_unsupported_numbers"] == ["October 9"]
+
+
+# --------------------------------------------------------------------------- inputs and diagnostics
+
+
+def test_fallback_reasons_are_explicit_and_secrets_are_redacted():
+    inputs = _inputs_with_period()
+    _, source, diagnostics = generate_text(inputs, None)
+    assert source == "template" and diagnostics == {"fallback_reason": "no_api_key"}
+    _, _, diagnostics = generate_text(inputs, None, skip_reason="sdk_not_installed")
+    assert diagnostics["fallback_reason"] == "sdk_not_installed"
+
+    def failing(system, user):
+        raise RuntimeError("401 invalid x-api-key sk-ant-api03-ABCDEFGHIJKLMNOPQRSTUVWXYZ012345")
+
+    _, _, diagnostics = generate_text(inputs, failing)
+    assert diagnostics["fallback_reason"] == "llm_error"
+    assert "ABCDEFGHIJKLMNOP" not in diagnostics["llm_error_summary"]
+    assert diagnostics["llm_error_summary"].startswith("RuntimeError")
+
+
+def test_inputs_carry_confidence_caveats_stability_hidden_count_and_demo_status():
+    dashboard = {
+        **DASHBOARD,
+        "opportunities": [{**DASHBOARD["opportunities"][0], "confidence": {"level": "low", "points": 1}}],
+        "events": [
+            *[{"type": "PRICE_DECREASE", "severity": "low", "confidence": "high", "brand": "B", "summary": f"Cut {i}.",
+               "keyword": "camping tent", "caveat": "Same offer.", "is_demo": False} for i in range(9)],
+            {"type": "REMOVED_PRODUCT", "severity": "high", "confidence": "medium", "brand": "Coleman",
+             "summary": "No longer on the shelf: Sundome.", "keyword": "camping tent",
+             "caveat": "Sampled shelf.", "is_demo": False},
+        ],
+    }
+    extras = {"probe_stability": {"camping tent": 0.12}, "low_confidence_events_hidden": 3, "latest_scan_is_demo": True}
+    inputs = build_inputs(MARKET, dashboard, extras)
+    assert any(e["type"] == "REMOVED_PRODUCT" for e in inputs["events"])  # not crowded out by 9 price events
+    assert len(inputs["events"]) <= 8
+    assert all("confidence" in e and "caveat" in e for e in inputs["events"])
+    assert inputs["opportunities"][0]["confidence"] == {"level": "low", "points": 1}
+    assert inputs["opportunities"][0]["caveats"]
+    assert inputs["probe_stability"] == [{"keyword": "camping tent", "overlap": 0.12, "label": "volatile"}]
+    assert inputs["low_confidence_events_hidden"] == 3
+    assert inputs["latest_scan_is_demo"] is True and inputs["has_demo_history"] is True
+
+    text = template_brief(inputs)
+    assert "likely noise" in text and "low-confidence" in text and "confidence medium" in text
+    assert unsupported_numbers(text, inputs) == []
+
+
+def test_generate_weekly_brief_sends_stored_evidence_to_the_model_and_exposes_diagnostics():
+    import json as _json
+
+    from tests.test_integrity import BASE, add_scan, shelf  # reuse the synthetic scan helpers
+
+    initialize_database()
+    user_id = repo.create_user("brief@example.com", "B", "x$y")
+    market_id = repo.create_market(
+        user_id, name="Brief", country="US", category="Widgets", brand_name=None, keywords=["probe"], competitors=[]
+    )
+    full, reduced = shelf("Alpha one", "Beta two", "Gamma three"), shelf("Alpha one", "Beta two")
+    for day, rows in enumerate([full, full, reduced, reduced, reduced]):
+        add_scan(market_id, day, rows, demo=(day == 4))
+    market = repo.get_market(market_id)
+    from app.services.analytics_service import build_dashboard
+
+    seen = {}
+
+    def narrator(system, user):
+        seen["system"], seen["user"] = system, user
+        return "Gamma three left the shelf."
+
+    report = generate_weekly_brief(market, build_dashboard(market, include_low_confidence=True), narrator)
+    payload = _json.loads(seen["user"].split("JSON:\n\n", 1)[1])
+    assert any(e["type"] == "REMOVED_PRODUCT" for e in payload["events"])
+    assert payload["probe_stability"][0]["keyword"] == "probe"
+    assert payload["latest_scan_is_demo"] is True
+    assert "Never hide uncertainty" in seen["system"]
+    assert report["source"] == "llm"
+    assert report["diagnostics"]["data_includes_demo"] is True
+    assert "inputs_json" not in report and "inputs" not in report
+
+    assert repo.latest_report(market_id)["diagnostics"] == report["diagnostics"]
+    assert BASE  # imported helper constants are intentionally shared with the integrity tests

@@ -10,7 +10,7 @@ from app.db import initialize_database
 from app.intelligence.pricing import discount_rate_pct, price_stats
 from app.schemas import DashboardResponse
 from app.seed_history import seed_history
-from app.services.analytics_service import _format_event, build_dashboard, competitor_table, event_change_pct
+from app.services.analytics_service import build_dashboard, competitor_table, event_change_pct, format_event
 from app.services.scan import run_scan
 from tests.factories import obs
 
@@ -71,7 +71,7 @@ def _stored(kind: str, **metadata):
 ])
 def test_event_change_pct_is_lifted_from_evidence(kind, metadata, expected):
     assert event_change_pct(kind, metadata) == expected
-    formatted = _format_event(_stored(kind, **metadata))
+    formatted = format_event(_stored(kind, **metadata))
     assert formatted["change_pct"] == expected
     assert formatted["summary"] == "s" and formatted["caveat"] == "c"
     assert "summary" not in formatted["evidence"] and "caveat" not in formatted["evidence"]

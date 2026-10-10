@@ -1,10 +1,11 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import { ApiError } from "./api/errors";
 import { AuthProvider } from "./auth/AuthProvider";
 import { AppShell } from "./components/AppShell";
+import MarketLayout from "./pages/MarketLayout";
 import { RequireAuth } from "./components/RequireAuth";
 import { Loading } from "./components/states";
 import LoginPage from "./pages/LoginPage";
@@ -14,6 +15,15 @@ import NotFoundPage from "./pages/NotFoundPage";
 
 // The dashboard pulls in recharts; load it only when a market is opened.
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
+const ChangesPage = lazy(() => import("./pages/sections/ChangesPage"));
+const ScannerPage = lazy(() => import("./pages/sections/ScannerPage"));
+const DemandPage = lazy(() => import("./pages/sections/DemandPage"));
+const ShelfPage = lazy(() => import("./pages/sections/ShelfPage"));
+const OpportunitiesPage = lazy(() => import("./pages/sections/OpportunitiesPage"));
+const BriefPage = lazy(() => import("./pages/sections/BriefPage"));
+const AlertsPage = lazy(() => import("./pages/sections/AlertsPage"));
+const ReplayPage = lazy(() => import("./pages/sections/ReplayPage"));
+const withFallback = (page: ReactNode) => <Suspense fallback={<Loading label="Loading…" rows={6} />}>{page}</Suspense>;
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -33,14 +43,27 @@ export default function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
-            <Route element={<RequireAuth><AppShell /></RequireAuth>}>
+            <Route
+              element={
+                <RequireAuth>
+                  <AppShell />
+                </RequireAuth>
+              }
+            >
               <Route path="/" element={<Navigate to="/markets" replace />} />
               <Route path="/markets" element={<MarketsPage />} />
               <Route path="/markets/new" element={<NewMarketPage />} />
-              <Route
-                path="/markets/:id"
-                element={<Suspense fallback={<Loading label="Loading dashboard…" rows={6} />}><DashboardPage /></Suspense>}
-              />
+              <Route path="/markets/:id" element={<MarketLayout />}>
+                <Route index element={withFallback(<DashboardPage />)} />
+                <Route path="changes" element={withFallback(<ChangesPage />)} />
+                <Route path="scanner" element={withFallback(<ScannerPage />)} />
+                <Route path="demand" element={withFallback(<DemandPage />)} />
+                <Route path="shelf" element={withFallback(<ShelfPage />)} />
+                <Route path="opportunities" element={withFallback(<OpportunitiesPage />)} />
+                <Route path="brief" element={withFallback(<BriefPage />)} />
+                <Route path="alerts" element={withFallback(<AlertsPage />)} />
+                <Route path="replay" element={withFallback(<ReplayPage />)} />
+              </Route>
               <Route path="*" element={<NotFoundPage />} />
             </Route>
           </Routes>

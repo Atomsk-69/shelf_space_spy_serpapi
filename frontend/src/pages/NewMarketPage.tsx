@@ -9,11 +9,21 @@ import type { BrandSuggestion } from "../types";
 
 // SerpAPI `gl` codes. The backend lowercases whatever it receives.
 const COUNTRIES: { code: string; name: string }[] = [
-  { code: "us", name: "United States" }, { code: "gb", name: "United Kingdom" }, { code: "in", name: "India" },
-  { code: "ca", name: "Canada" }, { code: "au", name: "Australia" }, { code: "de", name: "Germany" },
-  { code: "fr", name: "France" }, { code: "es", name: "Spain" }, { code: "it", name: "Italy" },
-  { code: "nl", name: "Netherlands" }, { code: "jp", name: "Japan" }, { code: "br", name: "Brazil" },
-  { code: "mx", name: "Mexico" }, { code: "sg", name: "Singapore" }, { code: "ae", name: "United Arab Emirates" },
+  { code: "us", name: "United States" },
+  { code: "gb", name: "United Kingdom" },
+  { code: "in", name: "India" },
+  { code: "ca", name: "Canada" },
+  { code: "au", name: "Australia" },
+  { code: "de", name: "Germany" },
+  { code: "fr", name: "France" },
+  { code: "es", name: "Spain" },
+  { code: "it", name: "Italy" },
+  { code: "nl", name: "Netherlands" },
+  { code: "jp", name: "Japan" },
+  { code: "br", name: "Brazil" },
+  { code: "mx", name: "Mexico" },
+  { code: "sg", name: "Singapore" },
+  { code: "ae", name: "United Arab Emirates" },
   { code: "za", name: "South Africa" },
 ];
 
@@ -57,7 +67,13 @@ export default function NewMarketPage() {
     if (!category.trim()) return;
     suggest.mutate(
       { category: category.trim(), country },
-      { onSuccess: (data) => goToReview(data.keywords, [...data.brands].sort((a, b) => b.count - a.count)) },
+      {
+        onSuccess: (data) =>
+          goToReview(
+            data.keywords,
+            [...data.brands].sort((a, b) => b.count - a.count),
+          ),
+      },
     );
   }
 
@@ -90,7 +106,11 @@ export default function NewMarketPage() {
       meta: (
         <>
           {info && <span className="chip-meta">{info.count}×</span>}
-          {info?.inferred && <span className="chip-tag" title="Guessed from product titles. Check the spelling.">inferred</span>}
+          {info?.inferred && (
+            <span className="chip-tag" title="Guessed from product titles. Check the spelling.">
+              inferred
+            </span>
+          )}
           {isOwn && <span className="chip-tag">you</span>}
         </>
       ),
@@ -103,13 +123,20 @@ export default function NewMarketPage() {
         <div>
           <p className="card-label">GUIDED SETUP</p>
           <h1 className="page-title">Track a new market</h1>
-          <p className="lede">Type any category and country. We'll propose search probes and competitor brands from live shopping data, and you decide what to keep.</p>
+          <p className="lede">
+            Type any category and country. We'll propose search probes and competitor brands from live shopping data, and you decide what to
+            keep.
+          </p>
         </div>
       </section>
 
       <ol className="stepper" aria-label="Setup steps">
-        <li aria-current={step === "describe" ? "step" : undefined} className={step === "describe" ? "is-current" : "is-done"}>1. Describe the market</li>
-        <li aria-current={step === "review" ? "step" : undefined} className={step === "review" ? "is-current" : undefined}>2. Review and create</li>
+        <li aria-current={step === "describe" ? "step" : undefined} className={step === "describe" ? "is-current" : "is-done"}>
+          1. Describe the market
+        </li>
+        <li aria-current={step === "review" ? "step" : undefined} className={step === "review" ? "is-current" : undefined}>
+          2. Review and create
+        </li>
       </ol>
 
       {step === "describe" && (
@@ -128,15 +155,26 @@ export default function NewMarketPage() {
             <label htmlFor={ids.country}>
               Country
               <select id={ids.country} value={country} onChange={(event) => setCountry(event.target.value)}>
-                {COUNTRIES.map((item) => <option key={item.code} value={item.code}>{item.name} ({item.code.toUpperCase()})</option>)}
+                {COUNTRIES.map((item) => (
+                  <option key={item.code} value={item.code}>
+                    {item.name} ({item.code.toUpperCase()})
+                  </option>
+                ))}
               </select>
             </label>
           </div>
-          <p className="field-hint">Suggestions use about 2 SerpAPI credits (one autocomplete, one shopping search). Cached results cost nothing.</p>
+          <p className="field-hint">
+            Suggestions use about 2 SerpAPI credits (one autocomplete, one shopping search). Cached results cost nothing.
+          </p>
           {suggest.isError && (
             <div className="setup-error">
               <ErrorState error={suggest.error} title="Couldn't fetch suggestions" />
-              <button type="button" className="button-secondary" onClick={() => goToReview(category.trim() ? [category.trim()] : [], [])} disabled={!category.trim()}>
+              <button
+                type="button"
+                className="button-secondary"
+                onClick={() => goToReview(category.trim() ? [category.trim()] : [], [])}
+                disabled={!category.trim()}
+              >
                 Skip and enter probes manually
               </button>
             </div>
@@ -153,7 +191,9 @@ export default function NewMarketPage() {
         <form className="panel setup-form" onSubmit={submitCreate} aria-busy={create.isPending}>
           <p className="setup-summary">
             <strong>{category}</strong> in <strong>{countryName}</strong>
-            <button type="button" className="text-button" onClick={() => setStep("describe")}>Change</button>
+            <button type="button" className="text-button" onClick={() => setStep("describe")}>
+              Change
+            </button>
           </p>
 
           <div className="field-row">
@@ -171,7 +211,9 @@ export default function NewMarketPage() {
                 onChange={(event) => setBrandName(event.target.value)}
               />
               <datalist id={ids.brandList}>
-                {brandChips.map((chip) => <option key={chip.value} value={chip.value} />)}
+                {brandChips.map((chip) => (
+                  <option key={chip.value} value={chip.value} />
+                ))}
               </datalist>
             </label>
           </div>
@@ -187,19 +229,31 @@ export default function NewMarketPage() {
 
           <ChipEditor
             label="Competitor brands"
-            hint={brandChips.length
-              ? "Counts are how often each brand appeared on the sampled shelf. Inferred brands were guessed from product titles, so check them."
-              : "No brands suggested. Add the competitors you know, or leave this empty and let scans discover them."}
+            hint={
+              brandChips.length
+                ? "Counts are how often each brand appeared on the sampled shelf. Inferred brands were guessed from product titles, so check them."
+                : "No brands suggested. Add the competitors you know, or leave this empty and let scans discover them."
+            }
             chips={brandChipsWithMeta}
             onChange={setBrandChips}
             addPlaceholder="Add a competitor brand"
           />
 
-          {keywords.length === 0 && <p className="field-error" role="alert">Select at least one search probe.</p>}
-          {create.isError && <p className="notice error notice-error" role="alert">{errorMessage(create.error)}</p>}
+          {keywords.length === 0 && (
+            <p className="field-error" role="alert">
+              Select at least one search probe.
+            </p>
+          )}
+          {create.isError && (
+            <p className="notice error notice-error" role="alert">
+              {errorMessage(create.error)}
+            </p>
+          )}
 
           <div className="form-actions">
-            <button type="button" className="button-secondary" onClick={() => setStep("describe")}>Back</button>
+            <button type="button" className="button-secondary" onClick={() => setStep("describe")}>
+              Back
+            </button>
             <button type="submit" disabled={!canCreate} aria-busy={create.isPending}>
               {create.isPending ? "Creating market…" : `Create market with ${keywords.length} probe${keywords.length === 1 ? "" : "s"}`}
             </button>

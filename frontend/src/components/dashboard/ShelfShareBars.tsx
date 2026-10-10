@@ -52,13 +52,23 @@ export function ShelfShareBars({ entries }: { entries: ShelfShareEntry[] }) {
     <figure className="chart-figure">
       {hasMine && (
         <ul className="chart-legend" aria-label="Legend">
-          <li><span className="legend-swatch legend-bar legend-mine" aria-hidden="true" />Your brand</li>
-          <li><span className="legend-swatch legend-bar legend-other" aria-hidden="true" />Other brands</li>
+          <li>
+            <span className="legend-swatch legend-bar legend-mine" aria-hidden="true" />
+            Your brand
+          </li>
+          <li>
+            <span className="legend-swatch legend-bar legend-other" aria-hidden="true" />
+            Other brands
+          </li>
         </ul>
       )}
       <ul className={hasMine ? "share-bars" : "share-bars single-series"}>
         {rows.map((row) => (
-          <li key={row.brand} className={row.is_mine ? "share-row is-mine" : "share-row"} title={`${row.brand}: ${formatPct(row.share_pct)} of visible shelf${row.listings ? `, ${row.listings} listing${row.listings === 1 ? "" : "s"}` : ""}`}>
+          <li
+            key={row.brand}
+            className={row.is_mine ? "share-row is-mine" : "share-row"}
+            title={`${row.brand}: ${formatPct(row.share_pct)} of visible shelf${row.listings ? `, ${row.listings} listing${row.listings === 1 ? "" : "s"}` : ""}`}
+          >
             <span className="share-name">
               {row.brand}
               {row.is_mine && <span className="chip-tag">you</span>}

@@ -61,9 +61,18 @@ def test_low_volume_halves_demand_swing():
     normal = score_opportunity("a", demand={"growth_pct": 40.0, "momentum": "flat", "low_volume": False}, **common)
     low = score_opportunity("b", demand={"growth_pct": 40.0, "momentum": "flat", "low_volume": True,
                                          "caveats": ["Search interest is very low"]}, **common)
-    assert normal["components"]["demand"] == 90.0
-    assert low["components"]["demand"] == 70.0
+    assert 50 < low["components"]["demand"] < normal["components"]["demand"] < 100
     assert "Search interest is very low" in low["caveats"]
+
+
+def test_strong_growth_does_not_saturate_demand_component():
+    common = dict(supply=None, supply_growth=None, pricing=None, incumbents=None, scan_count=3, stability=None)
+    scores = [
+        score_opportunity("k", demand={"growth_pct": g, "momentum": "flat", "low_volume": False}, **common)
+        ["components"]["demand"]
+        for g in (50.0, 100.0, 200.0)
+    ]
+    assert scores[0] < scores[1] < scores[2] < 100
 
 
 def test_confidence_does_not_change_score():

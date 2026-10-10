@@ -37,6 +37,9 @@ from app.core.config import get_settings  # noqa: E402
 from app.services import serpapi  # noqa: E402
 from tests import factories  # noqa: E402
 
+# The real network function, kept so tests can exercise its status-code handling with a fake httpx.
+REAL_HTTP_GET = serpapi._http_get
+
 
 class NetworkBlocked(AssertionError):
     pass

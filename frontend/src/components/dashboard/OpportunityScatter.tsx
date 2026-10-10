@@ -23,9 +23,15 @@ import { EmptyState } from "../states";
 
 type Anchor = "start" | "middle" | "end";
 type Point = {
-  x: number; y: number; keyword: string; score: number; label: OpportunityLabel;
+  x: number;
+  y: number;
+  keyword: string;
+  score: number;
+  label: OpportunityLabel;
   /** Direct-label text per anchor: only one is non-empty, and only for the top-scored points. */
-  tagStart: string; tagMiddle: string; tagEnd: string;
+  tagStart: string;
+  tagMiddle: string;
+  tagEnd: string;
 };
 
 const LABELLED_POINTS = 3;
@@ -78,7 +84,11 @@ function pointLabel(anchor: Anchor) {
       const box = viewBox as CartesianViewBox;
       const centerX = (box.x ?? 0) + (box.width ?? 0) / 2;
       const x = anchor === "start" ? centerX - 6 : anchor === "end" ? centerX + 6 : centerX;
-      return <text x={x} y={(box.y ?? 0) - 6} textAnchor={anchor} fill="var(--viz-ink-2)" fontSize={12}>{String(value)}</text>;
+      return (
+        <text x={x} y={(box.y ?? 0) - 6} textAnchor={anchor} fill="var(--viz-ink-2)" fontSize={12}>
+          {String(value)}
+        </text>
+      );
     };
     pointLabels.set(anchor, render);
   }
@@ -96,9 +106,15 @@ function ScatterTooltip({ active, payload }: TooltipContentProps) {
   return (
     <div className="chart-tooltip">
       <p className="tooltip-title">{point.keyword}</p>
-      <p><strong>{point.score}</strong>/100 <span className="muted-ink">score · {point.label}</span></p>
-      <p><strong>{formatSignedPct(point.y)}</strong> <span className="muted-ink">demand growth</span></p>
-      <p><strong>{formatSignedPct(point.x)}</strong> <span className="muted-ink">supply growth</span></p>
+      <p>
+        <strong>{point.score}</strong>/100 <span className="muted-ink">score · {point.label}</span>
+      </p>
+      <p>
+        <strong>{formatSignedPct(point.y)}</strong> <span className="muted-ink">demand growth</span>
+      </p>
+      <p>
+        <strong>{formatSignedPct(point.x)}</strong> <span className="muted-ink">supply growth</span>
+      </p>
     </div>
   );
 }
@@ -108,7 +124,12 @@ export function OpportunityScatter({ opportunities }: { opportunities: Opportuni
   const plottable = ranked.filter((item) => isNum(item.demand_growth) && isNum(item.supply_growth));
 
   if (plottable.length === 0) {
-    return <EmptyState title="No demand and supply readings yet" hint="Each probe needs Google Trends history and at least one shelf scan before it can be plotted." />;
+    return (
+      <EmptyState
+        title="No demand and supply readings yet"
+        hint="Each probe needs Google Trends history and at least one shelf scan before it can be plotted."
+      />
+    );
   }
 
   const xDomain = domainFor(plottable.map((item) => item.supply_growth as number));
@@ -128,12 +149,17 @@ export function OpportunityScatter({ opportunities }: { opportunities: Opportuni
       tagEnd: anchor === "end" ? tag : "",
     };
   });
-  const groups = LABEL_ORDER.map((label) => ({ label, points: points.filter((point) => point.label === label) })).filter((group) => group.points.length > 0);
+  const groups = LABEL_ORDER.map((label) => ({ label, points: points.filter((point) => point.label === label) })).filter(
+    (group) => group.points.length > 0,
+  );
 
   return (
     <figure className="chart-figure">
       <ul className="chart-legend" aria-label="Legend">
-        <li><span className="legend-swatch legend-area" aria-hidden="true" />Golden quadrant: demand up, supply shrinking</li>
+        <li>
+          <span className="legend-swatch legend-area" aria-hidden="true" />
+          Golden quadrant: demand up, supply shrinking
+        </li>
         {groups.map((group) => (
           <li key={group.label} title={LABEL_HINT[group.label]}>
             <span className="legend-swatch legend-dot" style={{ background: LABEL_COLOR[group.label] }} aria-hidden="true" />
@@ -141,12 +167,23 @@ export function OpportunityScatter({ opportunities }: { opportunities: Opportuni
           </li>
         ))}
       </ul>
-      <p className="axis-title axis-title-y" aria-hidden="true">↑ Demand growth (search interest)</p>
+      <p className="axis-title axis-title-y" aria-hidden="true">
+        ↑ Demand growth (search interest)
+      </p>
       <div className="chart-frame" style={{ height: CHART_HEIGHT }}>
         <ResponsiveContainer width="100%" height="100%">
           <ScatterChart margin={{ top: 18, right: 16, bottom: 4, left: 0 }}>
             <CartesianGrid stroke="var(--viz-grid)" />
-            <ReferenceArea x1={xDomain[0]} x2={0} y1={0} y2={yDomain[1]} fill="var(--viz-golden-wash)" fillOpacity={1} stroke="none" ifOverflow="hidden" />
+            <ReferenceArea
+              x1={xDomain[0]}
+              x2={0}
+              y1={0}
+              y2={yDomain[1]}
+              fill="var(--viz-golden-wash)"
+              fillOpacity={1}
+              stroke="none"
+              ifOverflow="hidden"
+            />
             <ReferenceLine x={0} stroke="var(--viz-baseline)" />
             <ReferenceLine y={0} stroke="var(--viz-baseline)" />
             <XAxis
@@ -172,7 +209,13 @@ export function OpportunityScatter({ opportunities }: { opportunities: Opportuni
             />
             <Tooltip content={ScatterTooltip} cursor={false} isAnimationActive={false} />
             {groups.map((group) => (
-              <Scatter key={group.label} name={group.label} data={group.points} shape={dotShape(LABEL_COLOR[group.label])} isAnimationActive={false}>
+              <Scatter
+                key={group.label}
+                name={group.label}
+                data={group.points}
+                shape={dotShape(LABEL_COLOR[group.label])}
+                isAnimationActive={false}
+              >
                 <LabelList dataKey="tagStart" content={pointLabel("start")} />
                 <LabelList dataKey="tagMiddle" content={pointLabel("middle")} />
                 <LabelList dataKey="tagEnd" content={pointLabel("end")} />
@@ -181,16 +224,31 @@ export function OpportunityScatter({ opportunities }: { opportunities: Opportuni
           </ScatterChart>
         </ResponsiveContainer>
       </div>
-      <p className="axis-title axis-title-x" aria-hidden="true">Supply growth (competing listings) →</p>
+      <p className="axis-title axis-title-x" aria-hidden="true">
+        Supply growth (competing listings) →
+      </p>
       <figcaption className="chart-caption">
-        Each dot is a search probe. Up means rising search interest; left means fewer competing listings. The top {Math.min(LABELLED_POINTS, points.length)} by score are labelled.
+        Each dot is a search probe. Up means rising search interest; left means fewer competing listings. The top{" "}
+        {Math.min(LABELLED_POINTS, points.length)} by score are labelled.
       </figcaption>
       <details className="table-view">
         <summary>View as table</summary>
         <div className="table-scroll">
           <table>
             <thead>
-              <tr><th scope="col">Probe</th><th scope="col" className="num">Score</th><th scope="col">Label</th><th scope="col" className="num">Demand</th><th scope="col" className="num">Supply</th></tr>
+              <tr>
+                <th scope="col">Probe</th>
+                <th scope="col" className="num">
+                  Score
+                </th>
+                <th scope="col">Label</th>
+                <th scope="col" className="num">
+                  Demand
+                </th>
+                <th scope="col" className="num">
+                  Supply
+                </th>
+              </tr>
             </thead>
             <tbody>
               {points.map((point) => (

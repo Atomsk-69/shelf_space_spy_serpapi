@@ -49,26 +49,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession({ token, user });
   }, []);
 
-  const logout = useCallback((nextNotice = "") => {
-    try {
-      sessionStorage.clear();
-    } catch {
-      // ignore
-    }
-    queryClient.clear();
-    setNotice(nextNotice);
-    setSession({ token: null, user: null });
-  }, [queryClient]);
+  const logout = useCallback(
+    (nextNotice = "") => {
+      try {
+        sessionStorage.clear();
+      } catch {
+        // ignore
+      }
+      queryClient.clear();
+      setNotice(nextNotice);
+      setSession({ token: null, user: null });
+    },
+    [queryClient],
+  );
 
   const token = session.token;
-  const request = useCallback<AuthedApi>(async <T,>(path: string, options?: RequestInit): Promise<T> => {
-    try {
-      return await api<T>(path, options, token ?? undefined);
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 401 && token) logout("Your session expired. Please sign in again.");
-      throw error;
-    }
-  }, [token, logout]);
+  const request = useCallback<AuthedApi>(
+    async <T,>(path: string, options?: RequestInit): Promise<T> => {
+      try {
+        return await api<T>(path, options, token ?? undefined);
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 401 && token) logout("Your session expired. Please sign in again.");
+        throw error;
+      }
+    },
+    [token, logout],
+  );
 
   const value = useMemo<AuthContextValue>(
     () => ({ token, user: session.user, notice, login, logout, request }),

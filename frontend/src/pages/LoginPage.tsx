@@ -43,7 +43,11 @@ export default function LoginPage() {
     <main className="auth-shell">
       <section className="brand-panel">
         <p className="eyebrow">SERPAPI HACKATHON 2026</p>
-        <h1>Shelf Space<br />Spy</h1>
+        <h1>
+          Shelf Space
+          <br />
+          Spy
+        </h1>
         <p>AI market intelligence for small brands that refuse to fly blind.</p>
       </section>
       <section className="login-panel">
@@ -51,12 +55,34 @@ export default function LoginPage() {
           <p className="card-label">WELCOME BACK</p>
           <h2>Enter your market room</h2>
           <p className="muted">Demo credentials are already filled in.</p>
-          {notice && <p className="notice notice-info" role="status">{notice}</p>}
+          {notice && (
+            <p className="notice notice-info" role="status">
+              {notice}
+            </p>
+          )}
           <form onSubmit={submit}>
-            <label>Email<input value={email} type="email" autoComplete="username" required onChange={(event) => setEmail(event.target.value)} /></label>
-            <label>Password<input value={password} type="password" autoComplete="current-password" required onChange={(event) => setPassword(event.target.value)} /></label>
-            {error && <p className="error" role="alert">{error}</p>}
-            <button disabled={loading} aria-busy={loading}>{loading ? "Signing in…" : "Sign in to Shelf Space Spy"}</button>
+            <label>
+              Email
+              <input value={email} type="email" autoComplete="username" required onChange={(event) => setEmail(event.target.value)} />
+            </label>
+            <label>
+              Password
+              <input
+                value={password}
+                type="password"
+                autoComplete="current-password"
+                required
+                onChange={(event) => setPassword(event.target.value)}
+              />
+            </label>
+            {error && (
+              <p className="error" role="alert">
+                {error}
+              </p>
+            )}
+            <button disabled={loading} aria-busy={loading}>
+              {loading ? "Signing in…" : "Sign in to Shelf Space Spy"}
+            </button>
           </form>
           <p className="hint">JWT bearer authentication · no cookies{USE_MOCK ? " · mock API (VITE_USE_MOCK=1)" : ""}</p>
         </div>

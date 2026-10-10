@@ -14,8 +14,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+/lib/
+/lib64/
 parts/
 sdist/
 var/
@@ -232,3 +232,8 @@ CLAUDE.md
 
 # TypeScript incremental build state
 *.tsbuildinfo
+
+# Playwright
+dist-e2e/
+playwright-report/
+test-results/
