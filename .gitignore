@@ -210,6 +210,7 @@ node_modules/
 frontend/dist/
 frontend/.vite/
 backend/data/
+backups/
 
 # Ruff stuff:
 .ruff_cache/
@@ -224,3 +225,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Claude Code local config (agents, hooks, routing rules)
+.claude/
+CLAUDE.md
