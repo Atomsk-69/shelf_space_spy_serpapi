@@ -6,7 +6,9 @@ export function Skeleton({ rows = 3, height }: { rows?: number; height?: number 
   if (height) return <div className="skeleton skeleton-block" style={{ height }} aria-hidden="true" />;
   return (
     <div className="skeleton-stack" aria-hidden="true">
-      {Array.from({ length: rows }, (_, index) => <div key={index} className="skeleton skeleton-line" style={{ width: `${92 - index * 13}%` }} />)}
+      {Array.from({ length: rows }, (_, index) => (
+        <div key={index} className="skeleton skeleton-line" style={{ width: `${92 - index * 13}%` }} />
+      ))}
     </div>
   );
 }
@@ -23,9 +25,15 @@ export function Loading({ label = "Loading…", rows, height }: { label?: string
 export function ErrorState({ error, onRetry, title = "Couldn't load this" }: { error: unknown; onRetry?: () => void; title?: string }) {
   return (
     <div role="alert" className="state-box state-error">
-      <p className="state-title"><span aria-hidden="true">!</span> {title}</p>
+      <p className="state-title">
+        <span aria-hidden="true">!</span> {title}
+      </p>
       <p className="state-hint">{errorMessage(error)}</p>
-      {onRetry && <button type="button" className="button-secondary button-small" onClick={onRetry}>Try again</button>}
+      {onRetry && (
+        <button type="button" className="button-secondary button-small" onClick={onRetry}>
+          Try again
+        </button>
+      )}
     </div>
   );
 }
@@ -70,7 +78,10 @@ export function QueryBody<T>({
     <div className={query.isFetching ? "query-body is-refreshing" : "query-body"} aria-busy={query.isFetching}>
       {query.error != null && (
         <p className="inline-warning" role="status">
-          Couldn't refresh: {errorMessage(query.error)} <button type="button" className="text-button" onClick={retry}>Retry</button>
+          Couldn't refresh: {errorMessage(query.error)}{" "}
+          <button type="button" className="text-button" onClick={retry}>
+            Retry
+          </button>
         </p>
       )}
       {isEmpty?.(query.data) ? empty : children(query.data)}

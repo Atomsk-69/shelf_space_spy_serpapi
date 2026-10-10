@@ -20,8 +20,13 @@ from app.schemas import (
 from app.seed_history import SeedHistoryError, seed_history
 from app.services.analytics_service import analyze_scan, build_dashboard
 from app.services.market_suggest import suggest_market
-from app.services.scan import ScanGuardError, run_scan
-from app.services.serpapi import SerpApiConfigurationError, SerpApiError
+from app.services.scan import BudgetExceededError, ScanGuardError, run_scan
+from app.services.serpapi import (
+    SerpApiConfigurationError,
+    SerpApiError,
+    SerpApiQuotaError,
+    SerpApiRateLimitError,
+)
 
 router = APIRouter(prefix="/markets", tags=["markets"])
 
@@ -56,8 +61,11 @@ def get_owned_market(market_id: int, user_id: int) -> MarketSummary:
 
 
 def _serpapi_http_error(error: Exception) -> HTTPException:
-    if isinstance(error, SerpApiConfigurationError):
+    if isinstance(error, (SerpApiConfigurationError, SerpApiQuotaError)):
         return HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(error))
+    if isinstance(error, SerpApiRateLimitError):
+        headers = {"Retry-After": str(int(error.retry_after))} if error.retry_after else None
+        return HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(error), headers=headers)
     return HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error))
 
 
@@ -155,6 +163,8 @@ async def scan_market(
             dry_run=dry_run or options.dry_run,
             refresh=refresh or options.refresh,
         )
+    except BudgetExceededError as error:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(error)) from error
     except ScanGuardError as error:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
     except (SerpApiConfigurationError, SerpApiError) as error:

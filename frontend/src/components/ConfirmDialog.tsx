@@ -33,16 +33,25 @@ export function ConfirmDialog({
       ref={ref}
       className="confirm-dialog"
       aria-labelledby={titleId}
-      onCancel={(event) => { event.preventDefault(); onCancel(); }}
-      onClick={(event) => { if (event.target === event.currentTarget) onCancel(); }}
+      onCancel={(event) => {
+        event.preventDefault();
+        onCancel();
+      }}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onCancel();
+      }}
     >
       <div className="confirm-body">
         <h2 id={titleId}>{title}</h2>
         <div className="confirm-content">{children}</div>
         <div className="confirm-actions">
           {/* Cancel takes initial focus: confirming may spend API credits, so Enter shouldn't do it by accident. */}
-          <button type="button" className="button-secondary" onClick={onCancel} autoFocus>{cancelLabel}</button>
-          <button type="button" onClick={onConfirm}>{confirmLabel}</button>
+          <button type="button" className="button-secondary" onClick={onCancel} autoFocus>
+            {cancelLabel}
+          </button>
+          <button type="button" onClick={onConfirm}>
+            {confirmLabel}
+          </button>
         </div>
       </div>
     </dialog>

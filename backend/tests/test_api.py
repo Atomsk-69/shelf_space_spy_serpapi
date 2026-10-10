@@ -154,3 +154,28 @@ def test_empty_dashboard_and_reports(client, auth_headers):
     assert latest["id"] == report["id"]
     assert client.get(f"/api/markets/{market_id}/dashboard", headers=auth_headers).json()["report"]["id"] == report["id"]
     assert repo.latest_report(market_id)["source"] == "template"
+
+
+def test_login_is_throttled_after_repeated_failures(client):
+    from app.api import auth
+
+    auth._failed_logins.clear()
+    for _ in range(auth.MAX_FAILED_LOGINS):
+        assert client.post("/api/auth/login", json={"email": "demo@example.com", "password": "bad"}).status_code == 401
+    assert client.post("/api/auth/login", json={"email": "demo@example.com", "password": "bad"}).status_code == 429
+    auth._failed_logins.clear()
+
+
+def test_startup_refuses_example_secret_outside_development(monkeypatch):
+    import pytest
+
+    from app.core.config import check_startup_safety, get_settings
+
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("JWT_SECRET", "change-this-demo-secret-before-deploying")
+    get_settings.cache_clear()
+    with pytest.raises(RuntimeError):
+        check_startup_safety(get_settings())
+    monkeypatch.setenv("JWT_SECRET", "x" * 40)
+    get_settings.cache_clear()
+    check_startup_safety(get_settings())

@@ -1,12 +1,19 @@
 """Change detection between shopping scans.
 
-Event types: ``NEW_PRODUCT``, ``NEW_COMPETITOR``, ``PRICE_DECREASE``, ``PRICE_INCREASE``,
-``DISCOUNT_STARTED``, ``RANK_GAIN``, ``RANK_LOSS``.
+Event types: ``NEW_PRODUCT``, ``NEW_COMPETITOR``, ``REMOVED_PRODUCT``, ``PRICE_DECREASE``,
+``PRICE_INCREASE``, ``DISCOUNT_STARTED``, ``RANK_GAIN``, ``RANK_LOSS``.
 
 * Price and discount events compare the *same offer* only: the same Google product at the
   same retailer. ``product_id`` alone is a catalog entry shared by many sellers.
 * Presence events (new product / new competitor) need at least two earlier scans and
   absence from all of them, because the Shopping shelf reshuffles between requests.
+* ``REMOVED_PRODUCT`` needs an established product (seen in two earlier scans) that is then
+  missing from three consecutive scans, including the current one. One missing listing is
+  never an exit.
+* Price events need a real Google ``product_id`` *and* a retailer. Without both the same
+  offer cannot be established, so no event is produced rather than guessing.
+* Confidence is capped by probe stability: on a volatile shelf even a large move or a
+  "new" product is likely reshuffle noise, so its confidence is lowered, never its severity.
 * Every event carries ``metadata`` evidence, a ``caveat`` and a ``confidence`` that is
   separate from its ``severity``.
 """
@@ -18,12 +25,20 @@ from collections.abc import Sequence
 from typing import Any
 
 from app.intelligence.common import Observation, brand_key, fmt_number, positive_price
+from app.intelligence.supply import shelf_stability
+from app.services.normalize import source_key
 
 PRICE_CHANGE_THRESHOLD_PCT = 5.0
 RANK_CHANGE_THRESHOLD = 3
 RANK_EVENT_MAX_POSITION = 20
 MIN_HISTORY_FOR_PRESENCE = 2
+REMOVAL_ABSENCES = 3          # consecutive scans (including the current one) a product must be missing from
+REMOVAL_MIN_SIGHTINGS = 2     # earlier scans in which it must have been seen first
+MASS_DISAPPEARANCE_RATIO = 0.5  # more than this share of established products vanishing = shelf shift, not exits
+VOLATILE_STABILITY = 0.3
+VERY_VOLATILE_STABILITY = 0.15
 MAX_EVENTS_PER_TYPE = 15
+MAX_STABILITY_PAIRS = 4
 
 SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 CONFIDENCE_ORDER = {"high": 0, "medium": 1, "low": 2}
@@ -33,19 +48,25 @@ CAVEATS = {
     "discount": "Based on the strike-through price the retailer shows on Google Shopping.",
     "rank": "Google Shopping ordering varies between requests; small moves are often noise.",
     "presence": "A sampled search shelf: absence from earlier scans does not prove a launch date.",
+    "removal": "A sampled search shelf: a product missing from several scans may still be sold, just not shown.",
 }
 
 
-def _offer_key(obs: Observation) -> str:
-    product = (str(obs.get("product_id") or "").strip()) or obs.get("canonical_key") or obs.get("title") or ""
-    return f"{product}|{(obs.get('source') or '').strip().lower()}"
+def _offer_key(obs: Observation) -> str | None:
+    """Same-offer identity: a Google product_id at one retailer. ``None`` when either is missing,
+    because a title-derived key cannot prove two listings are the same offer."""
+    product = str(obs.get("product_id") or "").strip()
+    retailer = source_key(obs.get("source"))
+    return f"{product}|{retailer}" if product and retailer else None
 
 
 def _first_by(observations: Sequence[Observation], key_fn) -> dict[str, Observation]:
-    """Index observations by key, keeping the best-positioned one per key."""
+    """Index observations by key, keeping the best-positioned one per key (``None`` keys are skipped)."""
     index: dict[str, Observation] = {}
     for obs in observations:
         key = key_fn(obs)
+        if key is None:
+            continue
         current = index.get(key)
         if current is None or (obs.get("position") or 999) < (current.get("position") or 999):
             index[key] = obs
@@ -223,6 +244,94 @@ def new_competitor_events(
     return events
 
 
+def removed_product_events(current: Sequence[Observation], history: Sequence[Sequence[Observation]]) -> list[dict]:
+    """Established products that have been missing for ``REMOVAL_ABSENCES`` consecutive scans."""
+    scans = [*history, current]
+    if len(scans) < REMOVAL_ABSENCES + REMOVAL_MIN_SIGHTINGS:
+        return []
+    recent, earlier = scans[-REMOVAL_ABSENCES:], scans[:-REMOVAL_ABSENCES]
+    if any(len(scan) == 0 for scan in recent):
+        return []  # an empty scan is a failed fetch, not an empty market
+    present_now = {obs.get("canonical_key") for scan in recent for obs in scan if obs.get("canonical_key")}
+    sightings: dict[str, int] = defaultdict(int)
+    last_seen: dict[str, Observation] = {}
+    for scan in earlier:  # oldest first, so a later sighting replaces an earlier one
+        best_in_scan: dict[str, Observation] = {}
+        for obs in scan:
+            key = obs.get("canonical_key")
+            if key and (key not in best_in_scan or (obs.get("position") or 999) < (best_in_scan[key].get("position") or 999)):
+                best_in_scan[key] = obs
+        for key, obs in best_in_scan.items():
+            sightings[key] += 1
+            last_seen[key] = obs
+    established = [key for key, count in sightings.items() if count >= REMOVAL_MIN_SIGHTINGS]
+    gone = [key for key in established if key not in present_now]
+    if not gone:
+        return []
+    mass = len(established) >= 5 and len(gone) / len(established) > MASS_DISAPPEARANCE_RATIO
+    events = []
+    for key in gone:
+        obs = last_seen[key]
+        position = obs.get("position") or 999
+        severity = "high" if position <= 5 else "medium" if position <= 15 else "low"
+        confidence = "low" if mass else "high" if sightings[key] >= 3 else "medium"
+        events.append(_event(
+            "REMOVED_PRODUCT", severity, confidence, obs,
+            summary=(f"No longer on the shelf: {_short(obs.get('title'))}"
+                     f"{' by ' + obs['brand'] if obs.get('brand') else ''}, "
+                     f"missing from the last {REMOVAL_ABSENCES} scans (last position {position})."),
+            previous_value=float(position) if position != 999 else None, current_value=None,
+            caveat=CAVEATS["removal"], canonical_key=key, sightings=sightings[key],
+            absent_scans=REMOVAL_ABSENCES, mass_disappearance=mass,
+        ))
+    return events
+
+
+def probe_stability(current: Sequence[Observation], history: Sequence[Sequence[Observation]]) -> dict[str, float | None]:
+    """Mean Jaccard overlap between consecutive scans per probe keyword (lowercase). ``None`` when a
+    probe has no comparable pair of scans."""
+    scans = [*history, current][-(MAX_STABILITY_PAIRS + 1):]
+    keywords = {(obs.get("keyword") or "").lower() for scan in scans for obs in scan}
+    result: dict[str, float | None] = {}
+    for keyword in keywords:
+        per_scan = [[o for o in scan if (o.get("keyword") or "").lower() == keyword] for scan in scans]
+        overlaps = [
+            value for older, newer in zip(per_scan, per_scan[1:], strict=False)
+            if (value := shelf_stability(newer, older)) is not None
+        ]
+        result[keyword] = round(sum(overlaps) / len(overlaps), 3) if overlaps else None
+    return result
+
+
+_LEVELS = ("low", "medium", "high")
+
+
+def apply_stability(events: list[dict], stability: dict[str, float | None]) -> None:
+    """Cap each event's confidence by how repeatable its probe's shelf is. Severity is untouched."""
+    for event in events:
+        keyword = (event.get("keyword") or "").lower()
+        value = stability.get(keyword)
+        exact = event["type"] in {"PRICE_DECREASE", "PRICE_INCREASE", "DISCOUNT_STARTED"}
+        is_rank = event["type"] in {"RANK_GAIN", "RANK_LOSS"}
+        if value is None:
+            cap = 0 if is_rank else 1
+        elif value < VERY_VOLATILE_STABILITY:
+            cap = 1 if exact else 0
+        elif value < VOLATILE_STABILITY:
+            cap = 1
+        else:
+            cap = 2
+        level = _LEVELS.index(event["confidence"])
+        event["metadata"]["probe_stability"] = value
+        if level > cap:
+            event["metadata"]["confidence_lowered_from"] = event["confidence"]
+            event["metadata"]["confidence_note"] = (
+                "Lowered: this probe's shelf changes a lot between scans."
+                if value is not None else "Lowered: not enough scans to judge how stable this probe's shelf is."
+            )
+            event["confidence"] = _LEVELS[cap]
+
+
 def _magnitude(event: dict) -> float:
     meta = event["metadata"]
     for field in ("change_pct", "discount_pct", "positions_moved"):
@@ -251,7 +360,11 @@ def detect_events(
         rank_events(current, previous),
         new_product_events(current, history),
         new_competitor_events(current, history, own_brand),
+        removed_product_events(current, history),
     ]
+    stability = probe_stability(current, history)
+    for group in groups:
+        apply_stability(group, stability)
     own = brand_key(own_brand)
     events: list[dict] = []
     for group in groups:

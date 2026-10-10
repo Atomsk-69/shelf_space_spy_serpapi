@@ -7,7 +7,10 @@ function DemandDelta({ value }: { value: number | null }) {
   const icon = direction === "up" ? "▲" : direction === "down" ? "▼" : "■";
   return (
     <strong className={`kpi-value delta-${direction}`}>
-      <span aria-hidden="true" className="delta-icon">{icon}</span> {formatSignedPct(value)}
+      <span aria-hidden="true" className="delta-icon">
+        {icon}
+      </span>{" "}
+      {formatSignedPct(value)}
     </strong>
   );
 }
@@ -18,11 +21,17 @@ export function KpiRow({ kpis }: { kpis: DashboardKpis }) {
     <dl className="metrics kpi-row">
       <div className="kpi">
         <dt>OBSERVED SKUS</dt>
-        <dd><strong className="kpi-value">{formatInt(kpis.observed_skus)}</strong><span className="kpi-sub">on the sampled shelf</span></dd>
+        <dd>
+          <strong className="kpi-value">{formatInt(kpis.observed_skus)}</strong>
+          <span className="kpi-sub">on the sampled shelf</span>
+        </dd>
       </div>
       <div className="kpi">
         <dt>NEW PRODUCTS</dt>
-        <dd><strong className="kpi-value">{formatInt(kpis.new_products)}</strong><span className="kpi-sub">since the previous scan</span></dd>
+        <dd>
+          <strong className="kpi-value">{formatInt(kpis.new_products)}</strong>
+          <span className="kpi-sub">since the previous scan</span>
+        </dd>
       </div>
       <div className="kpi">
         <dt>DEMAND CHANGE</dt>
@@ -34,7 +43,9 @@ export function KpiRow({ kpis }: { kpis: DashboardKpis }) {
       <div className="kpi">
         <dt>TOP OPPORTUNITY</dt>
         <dd>
-          <strong className="kpi-value kpi-text" title={top?.keyword}>{top ? top.keyword : DASH}</strong>
+          <strong className="kpi-value kpi-text" title={top?.keyword}>
+            {top ? top.keyword : DASH}
+          </strong>
           <span className="kpi-sub">{top ? `Score ${Math.round(top.score)}/100` : "Nothing scored yet"}</span>
         </dd>
       </div>

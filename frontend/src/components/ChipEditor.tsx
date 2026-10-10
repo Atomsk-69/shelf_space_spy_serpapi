@@ -50,8 +50,20 @@ export function ChipEditor({
 
   return (
     <fieldset className="chip-editor">
-      <legend>{label}{maxSelected !== undefined && <span className="chip-count"> {selectedCount}/{maxSelected} selected</span>}</legend>
-      {hint && <p className="field-hint" id={hintId}>{hint}</p>}
+      <legend>
+        {label}
+        {maxSelected !== undefined && (
+          <span className="chip-count">
+            {" "}
+            {selectedCount}/{maxSelected} selected
+          </span>
+        )}
+      </legend>
+      {hint && (
+        <p className="field-hint" id={hintId}>
+          {hint}
+        </p>
+      )}
       <ul className="chip-list">
         {chips.map((chip) => {
           const blocked = !chip.selected && atLimit;
@@ -65,7 +77,9 @@ export function ChipEditor({
                 title={blocked ? `Limit of ${maxSelected} reached. Deselect one first.` : undefined}
                 onClick={() => onChange(chips.map((item) => (item === chip ? { ...item, selected: !item.selected } : item)))}
               >
-                <span className="chip-check" aria-hidden="true">{chip.selected ? "✓" : "+"}</span>
+                <span className="chip-check" aria-hidden="true">
+                  {chip.selected ? "✓" : "+"}
+                </span>
                 <span>{chip.value}</span>
                 {chip.meta}
               </button>
@@ -82,7 +96,9 @@ export function ChipEditor({
         })}
       </ul>
       <div className="chip-add">
-        <label className="visually-hidden" htmlFor={inputId}>{addPlaceholder}</label>
+        <label className="visually-hidden" htmlFor={inputId}>
+          {addPlaceholder}
+        </label>
         <input
           id={inputId}
           value={draft}
@@ -91,7 +107,9 @@ export function ChipEditor({
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={onKeyDown}
         />
-        <button type="button" className="button-secondary" onClick={add} disabled={!normalize(draft)}>Add</button>
+        <button type="button" className="button-secondary" onClick={add} disabled={!normalize(draft)}>
+          Add
+        </button>
       </div>
     </fieldset>
   );

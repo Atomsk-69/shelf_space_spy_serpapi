@@ -33,3 +33,36 @@ def test_demo_category_terms_do_not_appear_in_app_code():
             if re.search(rf"\b{re.escape(term)}\b", text):
                 offenders.append(f"{path.relative_to(BACKEND)}: {term}")
     assert offenders == []
+
+
+def test_a_second_example_market_from_another_category_is_seeded_and_scannable(monkeypatch, fake_serpapi):
+    import asyncio
+
+    from app import repo
+    from app.core.config import get_settings
+    from app.db import initialize_database
+    from app.seed import seed_demo_data
+    from app.services.scan import run_scan
+
+    monkeypatch.setenv("DEMO_MARKET_2_NAME", "Second Market")
+    monkeypatch.setenv("DEMO_MARKET_2_CATEGORY", "Desk Chairs")
+    monkeypatch.setenv("DEMO_MARKET_2_KEYWORDS", "ergonomic chair,standing desk")
+    monkeypatch.setenv("DEMO_MARKET_2_COMPETITORS", "Herman Miller,Steelcase")
+    get_settings.cache_clear()
+    initialize_database()
+    seed_demo_data()
+    seed_demo_data()  # idempotent
+
+    markets = repo.list_markets(1)
+    assert [m["name"] for m in markets] == ["Example Market", "Second Market"]
+    second = markets[1]
+    assert second["category"] == "Desk Chairs" and second["keywords"] == ["ergonomic chair", "standing desk"]
+    result = asyncio.run(run_scan(second, force=True))
+    assert result["products_observed"] > 0 and result["opportunities"] == 2
+
+
+def test_second_market_is_not_seeded_when_not_configured():
+    from app.core.config import get_settings
+    from app.seed import example_markets
+
+    assert len(example_markets(get_settings())) == 1

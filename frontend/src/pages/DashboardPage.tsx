@@ -1,97 +1,118 @@
-import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
-import { useDashboard, useMarket, useScanMarket } from "../api/hooks";
-import { errorMessage, isNotFound } from "../api/errors";
+import { useDashboard, useLatestReport, useMarket } from "../api/hooks";
+import { isNotFound } from "../api/errors";
 import { CompetitorTable } from "../components/dashboard/CompetitorTable";
 import { EventsFeed } from "../components/dashboard/EventsFeed";
 import { KpiRow, KpiRowSkeleton } from "../components/dashboard/KpiRow";
-import { OpportunityCards } from "../components/dashboard/OpportunityCards";
 import { OpportunityScatter } from "../components/dashboard/OpportunityScatter";
-import { ScanButton } from "../components/dashboard/ScanButton";
-import { ShelfShareBars } from "../components/dashboard/ShelfShareBars";
-import { WeeklyBrief } from "../components/dashboard/WeeklyBrief";
+import { SignalList, SignalsHelp } from "../components/dashboard/SignalList";
 import { Panel } from "../components/Panel";
 import { EmptyState, ErrorState, Loading, QueryBody, Skeleton } from "../components/states";
-import { countryLabel, formatInt } from "../lib/format";
-import type { ScanResult } from "../types";
+import { Badge, DemoBadge, HistoryBadge } from "../components/ui/Badge";
+import { countryLabel, formatRelativeTime } from "../lib/format";
+import { parseMarketId } from "../lib/ids";
+import { findSection, parseBrief } from "../lib/brief";
+import { buildSignals } from "../lib/signals";
+import type { Report } from "../types";
 
 function NotFound() {
   return (
     <EmptyState
       title="Market not found"
       hint="It may have been deleted, or it belongs to another account."
-      action={<Link to="/markets" className="button-link">Back to your markets</Link>}
+      action={
+        <Link to="/markets" className="button-link">
+          Back to your markets
+        </Link>
+      }
     />
   );
 }
 
-function DemoBadge() {
-  return (
-    <span className="badge badge-demo" title="Earlier scans in this window were generated from the latest real scan to demonstrate history. Treat trends as illustrative.">
-      <span aria-hidden="true">◷</span> Demo historical data
-    </span>
-  );
-}
-
-const plural = (count: number, one: string, many = `${one}s`) => `${formatInt(count)} ${count === 1 ? one : many}`;
-
-/**
- * A dry run stores nothing (scan_id is null), so only its message and cost estimate are shown.
- * A guarded scan comes back as a 409 error and is shown by the error notice instead.
- */
-function ScanSummary({ result }: { result: ScanResult }) {
-  if (result.dry_run || result.scan_id === null) {
-    return <><strong>Dry run.</strong> {result.message}</>;
+/** Short version of the latest brief: headline plus the points most worth acting on. */
+function BriefSummary({ report, marketId }: { report: Report | null | undefined; marketId: number }) {
+  if (!report) {
+    return (
+      <EmptyState
+        title="No brief yet"
+        hint="The Weekly Brief turns this page's numbers into a short explanation."
+        action={
+          <Link to={`/markets/${marketId}/brief`} className="button-link">
+            Open Weekly Brief
+          </Link>
+        }
+      />
+    );
   }
-  const counts = [
-    `${plural(result.products_observed ?? 0, "product")} observed`,
-    `${plural(result.events ?? 0, "change")} detected`,
-    `${plural(result.opportunities ?? 0, "opportunity", "opportunities")} scored`,
-  ];
+  const brief = parseBrief(report.content);
+  const points = [...(findSection(brief, "Opportunities")?.bullets ?? []), ...(findSection(brief, "Watch-outs")?.bullets ?? [])].slice(
+    0,
+    3,
+  );
   return (
-    <>
-      <strong>Scan complete.</strong> {result.message} {counts.join(", ")}.
-      {result.warnings?.length > 0 && <> {result.warnings.join(" ")}</>}
-    </>
+    <div className="stack">
+      <div className="badge-row">
+        <Badge tone={report.source === "llm" ? "info" : "neutral"} icon={report.source === "llm" ? "✦" : "▤"}>
+          {report.source === "llm" ? "AI narrated" : "Template"}
+        </Badge>
+        {report.diagnostics?.data_includes_demo && <DemoBadge label="Includes demo data" />}
+        <span className="muted-ink">Written {formatRelativeTime(report.created_at)}</span>
+      </div>
+      <p className="brief-headline">{brief.headline}</p>
+      {points.length > 0 && (
+        <ul className="bullet-list brief-summary-points">
+          {points.map((point, index) => (
+            <li key={index}>{point}</li>
+          ))}
+        </ul>
+      )}
+      <Link to={`/markets/${marketId}/brief`} className="link-more">
+        Read the full brief →
+      </Link>
+    </div>
   );
 }
 
-/** Keyed by id so per-market UI state (scan notices, expanded cards) resets when switching markets. */
+/** Keyed by id so per-market UI state resets when switching markets. */
 export default function DashboardPage() {
   const params = useParams();
-  const id = /^\d+$/.test(params.id ?? "") ? Number(params.id) : NaN;
-  return <MarketDashboard key={params.id} id={id} />;
+  return <MarketDashboard key={params.id} id={parseMarketId(params.id)} />;
 }
 
 function MarketDashboard({ id }: { id: number }) {
   const market = useMarket(id);
   const dashboard = useDashboard(id);
-  const scan = useScanMarket(id);
-  const [scanResult, setScanResult] = useState<ScanResult | null>(null);
+  const latestReport = useLatestReport(id);
 
   if (!Number.isInteger(id) || id <= 0 || isNotFound(market.error) || isNotFound(dashboard.error)) return <NotFound />;
 
   const info = market.data;
   const country = info?.country ?? "";
   const data = dashboard.data;
-  const noScansYet = data !== undefined && data.kpis.observed_skus === 0 && data.shelf_share.length === 0 && data.opportunities.length === 0;
-
-  function runScan() {
-    setScanResult(null);
-    scan.mutate(undefined, { onSuccess: setScanResult });
-  }
+  const noScansYet = data !== undefined && data.scan_count === 0;
+  const signals = data ? buildSignals(data) : [];
 
   return (
     <>
-      <section className="page-intro dashboard-intro">
+      <section className="page-intro">
         <div>
           {info ? (
             <>
-              <p className="card-label">{info.category.toUpperCase()} · {countryLabel(info.country)}</p>
+              <p className="card-label">
+                {info.category} · {countryLabel(info.country)}
+              </p>
               <h1 className="page-title">{info.name}</h1>
               <p className="lede">
-                {info.brand_name ? <>Tracking <strong>{info.brand_name}</strong> against</> : "Research mode, watching"} {info.competitors.length} competitor{info.competitors.length === 1 ? "" : "s"} across {info.keywords.length} search probe{info.keywords.length === 1 ? "" : "s"}.
+                {info.brand_name ? (
+                  <>
+                    Tracking <strong>{info.brand_name}</strong> against
+                  </>
+                ) : (
+                  "Research mode, watching"
+                )}{" "}
+                {info.competitors.length} competitor{info.competitors.length === 1 ? "" : "s"} across {info.keywords.length} search probe
+                {info.keywords.length === 1 ? "" : "s"}.
               </p>
             </>
           ) : market.error ? (
@@ -99,26 +120,16 @@ function MarketDashboard({ id }: { id: number }) {
           ) : (
             <Loading label="Loading market…" rows={3} />
           )}
-          {data?.has_demo_history && <DemoBadge />}
+          <div className="badge-row page-badges">
+            {data?.has_demo_history && <DemoBadge label="Demo historical data" />}
+            {data && data.scan_count > 0 && data.scan_count < 3 && <HistoryBadge scans={data.scan_count} />}
+          </div>
         </div>
-        <ScanButton market={info} pending={scan.isPending} onConfirm={runScan} />
       </section>
 
-      {scan.isError && (
-        <p className="notice error" role="alert">
-          <strong>Scan failed.</strong> {errorMessage(scan.error)}
-          <button type="button" className="text-button" onClick={() => scan.reset()}>Dismiss</button>
-        </p>
-      )}
-      {scanResult && (
-        <p className={scanResult.dry_run ? "notice notice-info" : "notice success"} role="status">
-          <ScanSummary result={scanResult} />
-          <button type="button" className="text-button" onClick={() => setScanResult(null)}>Dismiss</button>
-        </p>
-      )}
-      {noScansYet && !scan.isPending && (
+      {noScansYet && (
         <p className="notice notice-info" role="status">
-          No scans yet. Run your first live scan to fill this dashboard; change events appear from the second scan on.
+          No scans yet. Use <strong>Run live scan</strong> in the top bar to fill this page; change events appear from the second scan on.
         </p>
       )}
 
@@ -127,47 +138,84 @@ function MarketDashboard({ id }: { id: number }) {
       </QueryBody>
 
       <div className="dash-grid">
-        <Panel id="what-changed" label="WHAT CHANGED" title="Moves on the shelf" className="span-7">
-          <QueryBody
-            query={dashboard}
-            loading={<Loading rows={6} />}
-            isEmpty={(value) => value.events.length === 0}
-            empty={<EmptyState title="No changes detected yet" hint="Price, rank and new-product events need at least two scans to compare." />}
-          >
-            {(value) => <EventsFeed events={value.events} country={country} />}
-          </QueryBody>
-        </Panel>
-
-        <Panel id="shelf-share" label="SHELF SHARE" title="Who owns the shelf" className="span-5">
-          <QueryBody
-            query={dashboard}
-            loading={<Loading rows={6} />}
-            isEmpty={(value) => value.shelf_share.length === 0}
-            empty={<EmptyState title="No shelf data yet" hint="Run a scan to see which brands hold the visible positions." />}
-          >
-            {(value) => <ShelfShareBars entries={value.shelf_share} />}
-          </QueryBody>
-        </Panel>
-
-        <Panel id="demand-supply" label="DEMAND × SUPPLY" title="Where demand outruns supply" className="span-7">
+        <Panel
+          id="demand-supply"
+          label="DEMAND × SUPPLY"
+          title="Where demand outruns supply"
+          className="span-7"
+          actions={
+            <Link to={`/markets/${id}/opportunities`} className="link-more">
+              Details
+            </Link>
+          }
+        >
           <QueryBody
             query={dashboard}
             loading={<Skeleton height={340} />}
             isEmpty={(value) => value.opportunities.length === 0}
-            empty={<EmptyState title="Nothing to plot yet" hint="Opportunity scores appear after a scan collects shelf and Google Trends data." />}
+            empty={
+              <EmptyState
+                title="Nothing to plot yet"
+                hint="Opportunity scores appear after a scan collects shelf and Google Trends data."
+              />
+            }
           >
             {(value) => <OpportunityScatter opportunities={value.opportunities} />}
           </QueryBody>
         </Panel>
 
-        <Panel id="opportunities" label="OPPORTUNITIES" title="Ranked probes" className="span-5">
+        <Panel
+          id="signals"
+          label="PRIORITIES"
+          title={
+            <>
+              Market signals
+              <SignalsHelp />
+            </>
+          }
+          className="span-5"
+        >
           <QueryBody
             query={dashboard}
-            loading={<Loading rows={8} />}
-            isEmpty={(value) => value.opportunities.length === 0}
-            empty={<EmptyState title="No opportunities scored yet" hint="Each probe gets a 0-100 score with its reasons and caveats once data is in." />}
+            loading={<Loading rows={6} />}
+            isEmpty={() => signals.length === 0}
+            empty={
+              <EmptyState
+                title="No signals yet"
+                hint="Signals combine strong opportunities with trusted changes. Both need scan history."
+              />
+            }
           >
-            {(value) => <OpportunityCards opportunities={value.opportunities} />}
+            {() => <SignalList signals={signals} marketId={id} />}
+          </QueryBody>
+        </Panel>
+
+        <Panel
+          id="what-changed"
+          label="WHAT CHANGED"
+          title="Recent changes"
+          className="span-7"
+          actions={
+            <Link to={`/markets/${id}/changes`} className="link-more">
+              View all
+            </Link>
+          }
+        >
+          <QueryBody
+            query={dashboard}
+            loading={<Loading rows={6} />}
+            isEmpty={(value) => value.events.length === 0}
+            empty={
+              <EmptyState title="No changes detected yet" hint="Price, rank and new-product events need at least two scans to compare." />
+            }
+          >
+            {(value) => <EventsFeed events={value.events} country={country} initialVisible={5} />}
+          </QueryBody>
+        </Panel>
+
+        <Panel id="brief" label="WEEKLY BRIEF" title="This week in short" className="span-5">
+          <QueryBody query={latestReport} loading={<Loading rows={5} />} errorTitle="Couldn't load the brief">
+            {(report) => <BriefSummary report={report ?? data?.report} marketId={id} />}
           </QueryBody>
         </Panel>
 
@@ -176,13 +224,13 @@ function MarketDashboard({ id }: { id: number }) {
             query={dashboard}
             loading={<Loading rows={5} />}
             isEmpty={(value) => value.competitors.length === 0}
-            empty={<EmptyState title="No competitor data yet" hint="Add competitor brands to this market or run a scan to discover them." />}
+            empty={
+              <EmptyState title="No competitor data yet" hint="Add competitor brands to this market or run a scan to discover them." />
+            }
           >
             {(value) => <CompetitorTable rows={value.competitors} country={country} ownBrand={info?.brand_name ?? null} />}
           </QueryBody>
         </Panel>
-
-        <WeeklyBrief marketId={id} fallback={data?.report} />
       </div>
     </>
   );

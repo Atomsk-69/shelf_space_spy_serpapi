@@ -5,11 +5,14 @@ connection context manager and the schema. ``initialize_database()`` is safe to 
 every start: it creates missing tables, adds missing columns and backfills legacy rows.
 """
 
+import logging
 import os
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 DATABASE_PATH = Path(__file__).resolve().parents[1] / "data" / "shelf_space_spy.db"
 DATABASE_ENV_VAR = "SHELF_SPACE_SPY_DB"
@@ -21,11 +24,14 @@ def database_path() -> Path:
     return Path(override) if override else DATABASE_PATH
 
 
-def _connect() -> sqlite3.Connection:
+def _connect(*, foreign_keys: bool = True) -> sqlite3.Connection:
+    """Foreign keys are enforced for normal use. Schema migration turns them off because SQLite
+    cannot drop a table that other tables reference while they are on."""
     path = database_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(path, timeout=30)
     connection.row_factory = sqlite3.Row
+    connection.execute(f"PRAGMA foreign_keys = {'ON' if foreign_keys else 'OFF'}")
     return connection
 
 
@@ -59,6 +65,18 @@ CREATE TABLE IF NOT EXISTS competitors (
     id INTEGER PRIMARY KEY,
     market_id INTEGER NOT NULL,
     brand_name TEXT NOT NULL,
+    FOREIGN KEY (market_id) REFERENCES markets(id)
+);
+
+CREATE TABLE IF NOT EXISTS products (
+    id INTEGER PRIMARY KEY,
+    market_id INTEGER NOT NULL,
+    canonical_key TEXT NOT NULL,
+    brand TEXT,
+    title TEXT NOT NULL,
+    first_seen_at TEXT NOT NULL,
+    last_seen_at TEXT NOT NULL,
+    UNIQUE (market_id, canonical_key),
     FOREIGN KEY (market_id) REFERENCES markets(id)
 );
 
@@ -141,6 +159,59 @@ CREATE TABLE IF NOT EXISTS opportunities (
     FOREIGN KEY (scan_id) REFERENCES scans(id)
 );
 
+CREATE TABLE IF NOT EXISTS scan_jobs (
+    id INTEGER PRIMARY KEY,
+    market_id INTEGER NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'succeeded', 'failed')),
+    force INTEGER NOT NULL DEFAULT 0,
+    refresh INTEGER NOT NULL DEFAULT 0,
+    progress_done INTEGER NOT NULL DEFAULT 0,
+    progress_total INTEGER NOT NULL DEFAULT 0,
+    message TEXT,
+    error TEXT,
+    error_code TEXT,
+    result_json TEXT,
+    created_at TEXT NOT NULL,
+    started_at TEXT,
+    finished_at TEXT,
+    FOREIGN KEY (market_id) REFERENCES markets(id)
+);
+
+CREATE TABLE IF NOT EXISTS alert_rules (
+    id INTEGER PRIMARY KEY,
+    market_id INTEGER NOT NULL,
+    key TEXT NOT NULL,
+    name TEXT NOT NULL,
+    event_types TEXT NOT NULL,
+    min_severity TEXT NOT NULL DEFAULT 'low',
+    min_confidence TEXT NOT NULL DEFAULT 'medium',
+    scope TEXT NOT NULL DEFAULT 'any' CHECK (scope IN ('any', 'mine', 'competitors')),
+    enabled INTEGER NOT NULL DEFAULT 1,
+    UNIQUE (market_id, key),
+    FOREIGN KEY (market_id) REFERENCES markets(id)
+);
+
+CREATE TABLE IF NOT EXISTS alerts (
+    id INTEGER PRIMARY KEY,
+    market_id INTEGER NOT NULL,
+    rule_id INTEGER NOT NULL,
+    scan_id INTEGER NOT NULL,
+    dedupe_key TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    confidence TEXT NOT NULL,
+    title TEXT NOT NULL,
+    detail TEXT,
+    brand TEXT,
+    keyword TEXT,
+    created_at TEXT NOT NULL,
+    read_at TEXT,
+    UNIQUE (rule_id, scan_id, dedupe_key),
+    FOREIGN KEY (market_id) REFERENCES markets(id),
+    FOREIGN KEY (rule_id) REFERENCES alert_rules(id),
+    FOREIGN KEY (scan_id) REFERENCES scans(id)
+);
+
 CREATE TABLE IF NOT EXISTS reports (
     id INTEGER PRIMARY KEY,
     market_id INTEGER NOT NULL,
@@ -153,6 +224,10 @@ CREATE TABLE IF NOT EXISTS reports (
 """
 
 INDEXES = """
+CREATE INDEX IF NOT EXISTS idx_observations_product ON product_observations(product_row_id);
+CREATE INDEX IF NOT EXISTS idx_products_market ON products(market_id);
+CREATE INDEX IF NOT EXISTS idx_scan_jobs_market ON scan_jobs(market_id, status);
+CREATE INDEX IF NOT EXISTS idx_alerts_market ON alerts(market_id, read_at, created_at);
 CREATE INDEX IF NOT EXISTS idx_scans_market ON scans(market_id, kind, scanned_at);
 CREATE INDEX IF NOT EXISTS idx_observations_scan ON product_observations(scan_id);
 CREATE INDEX IF NOT EXISTS idx_observations_market ON product_observations(market_id);
@@ -170,6 +245,7 @@ ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("product_observations", "brand_inferred", "INTEGER NOT NULL DEFAULT 0"),
     ("product_observations", "canonical_key", "TEXT"),
     ("product_observations", "is_demo", "INTEGER NOT NULL DEFAULT 0"),
+    ("product_observations", "product_row_id", "INTEGER REFERENCES products(id)"),
 ]
 
 
@@ -223,8 +299,62 @@ def _backfill_legacy_scans(connection: sqlite3.Connection) -> None:
         )
 
 
+def sync_products(connection: sqlite3.Connection, market_id: int | None = None) -> None:
+    """Keep ``products`` (one row per market + canonical key) and ``product_row_id`` in step with
+    ``product_observations``. Idempotent; raw observations are never modified except for the link.
+
+    Products without any remaining observation (for example after demo history is deleted) are
+    removed, and first/last seen always reflect the observations that exist.
+    """
+    scope = "" if market_id is None else " AND market_id = :m"
+    outer = "" if market_id is None else " AND p.market_id = :m"
+    params = {} if market_id is None else {"m": market_id}
+    connection.execute(
+        f"""INSERT OR IGNORE INTO products (market_id, canonical_key, brand, title, first_seen_at, last_seen_at)
+            SELECT market_id, canonical_key, MAX(brand), MIN(title), MIN(observed_at), MAX(observed_at)
+            FROM product_observations WHERE canonical_key IS NOT NULL{scope}
+            GROUP BY market_id, canonical_key""",
+        params,
+    )
+    connection.execute(
+        f"""UPDATE product_observations SET product_row_id = (
+                SELECT p.id FROM products p
+                WHERE p.market_id = product_observations.market_id
+                  AND p.canonical_key = product_observations.canonical_key)
+            WHERE canonical_key IS NOT NULL{scope}
+              AND (product_row_id IS NULL OR product_row_id NOT IN (
+                    SELECT p.id FROM products p
+                    WHERE p.market_id = product_observations.market_id
+                      AND p.canonical_key = product_observations.canonical_key))""",
+        params,
+    )
+    connection.execute(
+        f"""UPDATE products SET
+                first_seen_at = (SELECT MIN(observed_at) FROM product_observations o WHERE o.product_row_id = products.id),
+                last_seen_at = (SELECT MAX(observed_at) FROM product_observations o WHERE o.product_row_id = products.id),
+                brand = (SELECT o.brand FROM product_observations o WHERE o.product_row_id = products.id
+                         ORDER BY o.observed_at DESC, o.id DESC LIMIT 1),
+                title = (SELECT o.title FROM product_observations o WHERE o.product_row_id = products.id
+                         ORDER BY o.observed_at DESC, o.id DESC LIMIT 1)
+            WHERE EXISTS (SELECT 1 FROM product_observations o WHERE o.product_row_id = products.id)
+              {outer.replace('p.', 'products.')}""",
+        params,
+    )
+    connection.execute(
+        f"""DELETE FROM products WHERE NOT EXISTS
+                (SELECT 1 FROM product_observations o WHERE o.product_row_id = products.id)
+            {outer.replace('p.', 'products.').replace(' AND', ' AND', 1)}""",
+        params,
+    )
+
+
+def foreign_key_violations(connection: sqlite3.Connection) -> list[tuple[str, int, str]]:
+    """Existing rows that point at missing parents: (table, rowid, parent table)."""
+    return [(row[0], row[1], row[2]) for row in connection.execute("PRAGMA foreign_key_check")]
+
+
 def initialize_database() -> None:
-    connection = _connect()
+    connection = _connect(foreign_keys=False)
     try:
         # foreign_keys stays OFF here (SQLite default) so the markets rebuild can drop the old table.
         connection.executescript(BASE_SCHEMA)
@@ -235,7 +365,11 @@ def initialize_database() -> None:
         _make_brand_name_optional(connection)
         connection.executescript(INDEXES)
         _backfill_legacy_scans(connection)
+        sync_products(connection)
         connection.commit()
+        violations = foreign_key_violations(connection)
+        if violations:  # old data is reported, never deleted or blocking
+            logger.warning("foreign_key_violations", extra={"count": len(violations), "first": violations[:3]})
     finally:
         connection.close()
 

@@ -225,6 +225,11 @@ class ScanResponse(BaseModel):
     guard_active: bool = False
     minutes_since_last_scan: float | None = None
     warnings: list[str] = Field(default_factory=list)
+    alerts_created: int = 0
+    # Daily SerpAPI credit budget (UTC day). daily_budget 0 = no cap; budget_remaining is None then.
+    daily_budget: int = 0
+    credits_used_today: int = 0
+    budget_remaining: int | None = None
 
 
 class DemoHistoryResponse(BaseModel):
@@ -316,6 +321,9 @@ class Report(BaseModel):
     content: str
     source: str
     created_at: str
+    # Public summary of how the brief was made: fallback_reason, llm_attempts, model,
+    # rejected_claims, data_includes_demo. Never the stored evidence payload.
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
 
 
 class DashboardResponse(BaseModel):
@@ -328,3 +336,236 @@ class DashboardResponse(BaseModel):
     report: Report | None = None
     latest_scan_at: str | None = None
     scan_count: int = 0
+
+
+# --------------------------------------------------------------------------- section endpoints
+# Read-only payloads for /markets/{id}/<section>. `has_data: false` means "nothing stored yet", not an error.
+
+
+class ScanRef(BaseModel):
+    id: int
+    scanned_at: str
+    is_demo: bool
+
+
+class ScanRow(BaseModel):
+    id: int
+    kind: str
+    scanned_at: str
+    is_demo: bool
+    credits_used: int
+    products: int
+    trend_points: int
+
+
+class ScansResponse(BaseModel):
+    items: list[ScanRow]
+    total_credits: int
+
+
+class EventsPage(BaseModel):
+    items: list[MarketEvent]
+    total: int
+    limit: int
+    offset: int
+    # Low-confidence events matching the filters that are stored but not shown.
+    hidden_low_confidence: int
+    include_low_confidence: bool
+
+
+class ObservationRow(BaseModel):
+    id: int
+    keyword: str
+    title: str
+    brand: str | None = None
+    brand_inferred: bool = False
+    source: str | None = None
+    price: float | None = None
+    old_price: float | None = None
+    position: int | None = None
+    rating: float | None = None
+    # SerpAPI occasionally returns a non-integer count (e.g. 2.3), so this is not forced to int.
+    reviews: float | None = None
+    product_link: str | None = None
+    thumbnail: str | None = None
+    canonical_key: str | None = None
+    product_row_id: int | None = None
+
+
+class ObservationsPage(BaseModel):
+    has_data: bool
+    scan: ScanRef | None = None
+    items: list[ObservationRow]
+    total: int
+    limit: int
+    offset: int
+    keywords: list[str]
+    brands: list[str]
+
+
+class ProductInfo(BaseModel):
+    id: int
+    canonical_key: str
+    brand: str | None = None
+    title: str
+    first_seen_at: str
+    last_seen_at: str
+
+
+class ProductPoint(BaseModel):
+    scan_id: int
+    scanned_at: str
+    is_demo: bool
+    best_position: int | None = None
+    lowest_price: float | None = None
+    listings: int
+    retailers: list[str]
+
+
+class ProductHistory(BaseModel):
+    product: ProductInfo
+    history: list[ProductPoint]
+    listings_stored: int
+
+
+class TrendPointOut(BaseModel):
+    week_start: str
+    interest: float
+    is_partial: bool
+
+
+class DemandKeyword(BaseModel):
+    keyword: str
+    signal: dict[str, Any] | None = None
+    series: list[TrendPointOut]
+
+
+class DemandSection(BaseModel):
+    has_data: bool
+    scan: ScanRef | None = None
+    keywords: list[DemandKeyword]
+
+
+class ShelfSection(BaseModel):
+    has_data: bool
+    scan: ScanRef | None = None
+    overall: list[dict[str, Any]]
+    by_probe: dict[str, list[dict[str, Any]]]
+    stability: dict[str, float | None]
+    scans_compared: int = 0
+    method: str = ""
+
+
+class SupplySection(BaseModel):
+    has_data: bool
+    scan: ScanRef | None = None
+    probes: list[dict[str, Any]]
+    compared_with: ScanRef | None = None
+
+
+class PricingSection(BaseModel):
+    has_data: bool
+    scan: ScanRef | None = None
+    overall: dict[str, Any] | None = None
+    probes: list[dict[str, Any]]
+    brands: list[dict[str, Any]]
+
+
+class OpportunitiesSection(BaseModel):
+    has_data: bool
+    scan: ScanRef | None = None
+    trends_scan: ScanRef | None = None
+    items: list[Opportunity]
+
+
+class ReportsSection(BaseModel):
+    items: list[Report]
+
+
+# --------------------------------------------------------------------------- jobs, budget, alerts, replay
+
+
+class BudgetStatus(BaseModel):
+    daily_budget: int
+    credits_used_today: int
+    budget_remaining: int | None = None
+
+
+class ScanJob(BaseModel):
+    id: int
+    market_id: int
+    status: str  # queued | running | succeeded | failed
+    force: bool
+    refresh: bool
+    progress_done: int
+    progress_total: int
+    message: str | None = None
+    error: str | None = None
+    # budget | too_soon | in_progress | not_configured | quota | rate_limited | serpapi | timeout | interrupted | internal
+    error_code: str | None = None
+    result: dict[str, Any] | None = None
+    created_at: str
+    started_at: str | None = None
+    finished_at: str | None = None
+
+
+class AlertRule(BaseModel):
+    id: int
+    key: str
+    name: str
+    event_types: list[str]
+    min_severity: str
+    min_confidence: str
+    scope: str
+    enabled: bool
+
+
+class AlertRuleUpdate(BaseModel):
+    enabled: bool | None = None
+    min_severity: str | None = Field(default=None, pattern="^(low|medium|high)$")
+    min_confidence: str | None = Field(default=None, pattern="^(low|medium|high)$")
+
+
+class AlertRow(BaseModel):
+    id: int
+    rule_id: int
+    rule_name: str
+    scan_id: int
+    event_type: str
+    severity: str
+    confidence: str
+    title: str
+    detail: str | None = None
+    brand: str | None = None
+    keyword: str | None = None
+    created_at: str
+    read_at: str | None = None
+
+
+class AlertsPage(BaseModel):
+    items: list[AlertRow]
+    total: int
+    unread: int
+    limit: int
+    offset: int
+
+
+class AlertsReadRequest(BaseModel):
+    ids: list[int] | None = None  # omit or empty = mark everything read
+
+
+class AlertsSummary(BaseModel):
+    unread: int
+    by_market: dict[int, int]
+
+
+class ReplayScan(BaseModel):
+    id: int
+    scanned_at: str
+    is_demo: bool
+    products: int
+    events: int
+
+
+class ReplaySection(BaseModel):
+    scans: list[ReplayScan]

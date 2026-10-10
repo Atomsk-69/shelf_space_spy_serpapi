@@ -14,8 +14,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+/lib/
+/lib64/
 parts/
 sdist/
 var/
@@ -50,6 +50,7 @@ coverage.xml
 *.lcov
 .hypothesis/
 .pytest_cache/
+.serpapi_cache/
 cover/
 
 # Translations
@@ -232,3 +233,9 @@ CLAUDE.md
 
 # TypeScript incremental build state
 *.tsbuildinfo
+
+# Playwright
+dist-e2e/
+playwright-report/
+test-results/
+node_modules/

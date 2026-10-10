@@ -72,6 +72,10 @@ NON_BRAND_WORDS = FILLER_WORDS | frozenset({
     "deluxe", "limited", "edition", "hot", "cool", "smart", "portable", "wireless", "brand", "generic",
     "unbranded", "assorted", "various", "other", "this", "our", "my", "your", "all", "one",
     "get", "shop", "try", "use", "made", "make", "only", "just", "now", "special", "exclusive",
+    # Condition and generic descriptors that open many titles ("Refurbished ...", "Open ear ...").
+    "refurbished", "renewed", "used", "open", "bluetooth", "waterproof", "rechargeable", "electric",
+    "digital", "gaming", "sport", "sports", "outdoor", "foldable", "adjustable", "lightweight",
+    "upgraded", "newest", "latest", "heavy", "duty", "stainless", "steel", "led",
 })
 
 _DOMAIN_SUFFIX = re.compile(r"\.(com|in|co|net|org|shop|store|uk|us|au|ca|de|fr|io)(\.[a-z]{2})?$")
@@ -83,16 +87,66 @@ def standardize_units(text: str) -> str:
     return _UNIT_PATTERN.sub(lambda m: f"{m.group(1)}{_UNIT_CANONICAL[m.group(2).lower()]}", text)
 
 
-def _tokens(text: str) -> list[str]:
+_UNIT_ALT = "|".join(sorted((re.escape(unit) for unit in _UNIT_CANONICAL), key=len, reverse=True))
+_NUM = r"\d+(?:\.\d+)?"
+# "2 x 30 ml", "2x30ml"
+_MULTI_BEFORE = re.compile(rf"(?<![\w.])(\d+)\s*[x\u00d7]\s*({_NUM})\s*({_UNIT_ALT})(?![a-z])", re.IGNORECASE)
+# "30 ml x 2"
+_MULTI_AFTER = re.compile(rf"(?<![\w.])({_NUM})\s*({_UNIT_ALT})\s*[x\u00d7]\s*(\d+)(?![\w.])", re.IGNORECASE)
+# "pack of 3", "set of 2"
+_PACK_OF = re.compile(r"\b(?:pack|pk|set|box|bundle|combo|lot)\s+of\s+(\d+)\b", re.IGNORECASE)
+# "3 pack", "3-pack", "3 pk"
+_N_PACK = re.compile(r"(?<![\w.])(\d+)\s*-?\s*(?:pack|pk)\b", re.IGNORECASE)
+_METRIC_BASE = {"l": ("ml", 1000.0), "kg": ("g", 1000.0), "mg": ("g", 0.001)}
+_METRIC_TOKEN = re.compile(rf"^({_NUM})(l|kg|mg)$")
+
+
+def _pack_token(count: str) -> str:
+    return "" if int(count) <= 1 else f" pack{int(count)} "
+
+
+def _rewrite_packs(text: str) -> str:
+    """Make pack expressions comparable: ``2 x 30 ml``, ``30ml x 2`` and ``30 ml pack of 2`` agree.
+
+    The count becomes a ``packN`` token (a pack of one is just the product, so it adds none).
+    """
+    text = _MULTI_BEFORE.sub(lambda m: f" {m.group(2)} {m.group(3)}{_pack_token(m.group(1))}", text)
+    text = _MULTI_AFTER.sub(lambda m: f" {m.group(1)} {m.group(2)}{_pack_token(m.group(3))}", text)
+    text = _PACK_OF.sub(lambda m: _pack_token(m.group(1)), text)
+    return _N_PACK.sub(lambda m: _pack_token(m.group(1)), text)
+
+
+def _format_number(value: float) -> str:
+    return format(round(value, 3), "f").rstrip("0").rstrip(".")
+
+
+def to_base_unit(value: float, unit: str) -> tuple[float, str]:
+    """``1.5 l`` -> ``(1500.0, "ml")``, ``0.5 kg`` -> ``(500.0, "g")``; other units are unchanged."""
+    base, factor = _METRIC_BASE.get(unit, (unit, 1.0))
+    return value * factor, base
+
+
+def _canonical_measure(token: str) -> str:
+    match = _METRIC_TOKEN.match(token)
+    if not match:
+        return token
+    value, unit = to_base_unit(float(match.group(1)), match.group(2))
+    return f"{_format_number(value)}{unit}"
+
+
+def _tokens(text: str, *, canonical: bool = False) -> list[str]:
     text = ascii_fold(text).lower().replace("&", " and ")
+    if canonical:
+        text = _rewrite_packs(text)
     text = standardize_units(text)
     text = re.sub(r"(?<!\d)\.|\.(?!\d)", " ", text)  # keep decimal points only
     text = re.sub(r"[^a-z0-9.\s]", " ", text)
-    return text.split()
+    tokens = text.split()
+    return [_canonical_measure(token) for token in tokens] if canonical else tokens
 
 
 def normalize_title(title: str) -> str:
-    return " ".join(token for token in _tokens(title or "") if token not in FILLER_WORDS)
+    return " ".join(token for token in _tokens(title or "", canonical=True) if token not in FILLER_WORDS)
 
 
 def extract_size(title: str) -> str | None:
@@ -100,6 +154,37 @@ def extract_size(title: str) -> str | None:
         if _SIZE_TOKEN.match(token):
             return token
     return None
+
+
+@dataclass(frozen=True)
+class PackInfo:
+    """Size and multipack count parsed from a title. Sizes are in base units (ml, g, ...)."""
+
+    count: int = 1
+    size: float | None = None
+    unit: str | None = None
+
+    @property
+    def total(self) -> float | None:
+        return None if self.size is None else round(self.size * self.count, 3)
+
+
+def parse_pack(title: str) -> PackInfo:
+    """``2 x 30 ml`` -> count 2, 30 ml; ``Cleanser 1 L`` -> 1000 ml; ``pack of 3`` -> count 3."""
+    folded = ascii_fold(title or "").lower().replace("&", " and ")
+    count = 1
+    for pattern, group in ((_MULTI_BEFORE, 1), (_MULTI_AFTER, 3), (_PACK_OF, 1), (_N_PACK, 1)):
+        match = pattern.search(folded)
+        if match:
+            count = max(count, int(match.group(group)))
+    size: float | None = None
+    unit: str | None = None
+    for token in _tokens(title or "", canonical=True):
+        match = re.match(rf"^({_NUM})([a-z]+)$", token)
+        if match and match.group(2) in set(_UNIT_CANONICAL.values()) - {"pc", "ct", "gb", "tb", "mah", "cm", "mm", "in"}:
+            size, unit = float(match.group(1)), match.group(2)
+            break
+    return PackInfo(count=count, size=size, unit=unit)
 
 
 def numeric_tokens(normalized_title: str) -> frozenset[str]:
@@ -134,7 +219,7 @@ def _looks_like_brand_word(word: str) -> bool:
 @dataclass(frozen=True)
 class BrandMatch:
     name: str
-    method: str  # "known" | "pattern" | "first_token"
+    method: str  # "known" | "pattern" | "first_token" | "seller"
 
     @property
     def key(self) -> str:
@@ -142,7 +227,7 @@ class BrandMatch:
 
     @property
     def inferred(self) -> bool:
-        return self.method == "first_token"
+        return self.method in {"first_token", "seller"}
 
 
 # "... Waterproof Hiking Boot By Trailco": only trusted at the very end of a title, so
@@ -235,14 +320,72 @@ def retailer_keys(products: Sequence[dict[str, Any]], matches: Sequence[BrandMat
     return retailers
 
 
-def detect_brands(products: Sequence[dict[str, Any]], known_brands: Sequence[str] = ()) -> list[BrandMatch | None]:
-    """Brand per product. Guesses that are really a multi-brand retailer become ``None``."""
+_SELLER_SPLIT = re.compile(r"\s+[-|:]\s+")
+
+
+def _leet(text: str) -> str:
+    """Obfuscated spellings: ``Veat00l`` and ``VEATOOL`` compare equal."""
+    return brand_key(text).replace("0", "o")
+
+
+def _seller_brand(product: dict[str, Any]) -> BrandMatch | None:
+    """``Retailer - Seller`` sources: the seller store is the brand only when the title itself starts with
+    that name (ignoring 0/o). A reseller whose name never appears in the title stays unbranded."""
+    parts = _SELLER_SPLIT.split(product.get("source") or "", maxsplit=1)
+    if len(parts) < 2:
+        return None
+    seller, seller_key = parts[1].strip(), _leet(parts[1])
+    if len(seller_key) < 4:
+        return None
+    lead = _leet(" ".join((product.get("title") or "").split()[:3]))
+    return BrandMatch(_display_name(seller), "seller") if seller_key in lead else None
+
+
+def preferred_names(rows: Iterable[dict[str, Any]]) -> dict[str, str]:
+    """Most frequent spelling of each brand in earlier observations, so a name keeps its look across scans."""
+    counts: dict[str, Counter[str]] = defaultdict(Counter)
+    for row in rows:
+        if row.get("brand"):
+            counts[brand_key(row["brand"])][row["brand"]] += 1
+    return {key: names.most_common(1)[0][0] for key, names in counts.items()}
+
+
+def _canonical_names(
+    matches: list[BrandMatch | None], known_brands: Sequence[str], preferred: dict[str, str]
+) -> list[BrandMatch | None]:
+    """One display spelling per brand: your own list wins, then what earlier scans used, then the most common
+    spelling in this batch (so ``JLab`` x14 beats ``Jlab`` x6 everywhere)."""
+    known = {brand_key(name): name for name in known_brands}
+    seen: dict[str, Counter[str]] = defaultdict(Counter)
+    for match in matches:
+        if match:
+            seen[match.key][match.name] += 1
+
+    def choose(key: str) -> str:
+        if key in known:
+            return known[key]
+        if key in preferred:
+            return preferred[key]
+        # Most common; on a tie prefer the spelling with internal capitals ("JLab" over "Jlab").
+        return max(seen[key].items(), key=lambda item: (item[1], sum(ch.isupper() for ch in item[0][1:])))[0]
+
+    chosen = {key: choose(key) for key in seen}
+    return [BrandMatch(chosen[match.key], match.method) if match else None for match in matches]
+
+
+def detect_brands(
+    products: Sequence[dict[str, Any]], known_brands: Sequence[str] = (), preferred: dict[str, str] | None = None
+) -> list[BrandMatch | None]:
+    """Brand per product. Guesses that are really a multi-brand retailer become ``None``; titles with no brand
+    can still get one from a ``Retailer - Seller`` source (flagged inferred)."""
     matches = [detect_brand(product.get("title", ""), known_brands) for product in products]
     retailers = retailer_keys(products, matches)
-    return [
+    kept = [
         None if match and match.method != "known" and match.key in retailers else match
         for match in matches
     ]
+    filled = [match or _seller_brand(product) for match, product in zip(kept, products, strict=True)]
+    return _canonical_names(filled, known_brands, preferred or {})
 
 
 def brand_candidates(
@@ -377,8 +520,9 @@ def normalize_products(
     history: Iterable[dict[str, Any]] = (),
 ) -> list[dict[str, Any]]:
     """Return copies of ``products`` with ``brand``, ``brand_inferred`` and ``canonical_key`` set."""
+    history = list(history)
     index = CanonicalIndex.from_history(history)
-    matches = detect_brands(products, known_brands)
+    matches = detect_brands(products, known_brands, preferred_names(history))
     normalized = []
     for product, match in zip(products, matches, strict=True):
         item = dict(product)

@@ -15,6 +15,7 @@ from collections.abc import Sequence
 
 from app.intelligence.common import Observation, brand_key, pct_change
 from app.intelligence.shelf_share import shelf_share, top_n_share
+from app.services.normalize import source_key
 
 
 def supply_metrics(observations: Sequence[Observation]) -> dict:
@@ -23,7 +24,7 @@ def supply_metrics(observations: Sequence[Observation]) -> dict:
         return {"results": 0, "skus": 0, "brands": 0, "retailers": 0, "top3_share": 0.0, "density": 0.0}
     skus = {obs.get("canonical_key") or obs.get("title") for obs in observations}
     brands = {brand_key(obs.get("brand")) for obs in observations if obs.get("brand")}
-    retailers = {(obs.get("source") or "").strip().lower() for obs in observations if obs.get("source")}
+    retailers = {source_key(obs.get("source")) for obs in observations if obs.get("source")} - {""}
     return {
         "results": results,
         "skus": len(skus),

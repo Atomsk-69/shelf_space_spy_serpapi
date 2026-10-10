@@ -97,3 +97,61 @@ def test_second_real_scan_detects_changes(market, fake_serpapi):
     cuts = [e for e in events if e["type"] == "PRICE_DECREASE"]
     assert len(cuts) == 2  # once per probe keyword, same offer each time
     assert cuts[0]["previous_value"] == 130.0 and cuts[0]["current_value"] == 99.0
+
+
+def test_concurrent_scans_for_one_market_spend_credits_once(fake_serpapi):
+    import asyncio
+
+    from app import repo
+    from app.db import initialize_database
+    from app.seed import seed_demo_data
+    from app.services.scan import ScanInProgressError, run_scan
+
+    initialize_database()
+    seed_demo_data()
+    market = repo.get_market(1, 1)
+
+    async def both():
+        return await asyncio.gather(
+            run_scan(market, force=True), run_scan(market, force=True), return_exceptions=True
+        )
+
+    results = asyncio.run(both())
+    failures = [r for r in results if isinstance(r, ScanInProgressError)]
+    successes = [r for r in results if isinstance(r, dict)]
+    assert len(failures) == 1 and len(successes) == 1
+    assert fake_serpapi.count("google_shopping") == len(market["keywords"])
+
+
+def test_products_table_tracks_canonical_products(fake_serpapi):
+    import asyncio
+    from datetime import datetime, timedelta, timezone
+
+    from app import repo
+    from app.db import get_connection, initialize_database
+    from app.seed import seed_demo_data
+    from app.services.scan import run_scan
+
+    initialize_database()
+    seed_demo_data()
+    market = repo.get_market(1, 1)
+    start = datetime.now(timezone.utc) - timedelta(days=3)
+    asyncio.run(run_scan(market, force=True, now=start))
+    asyncio.run(run_scan(market, force=True, now=start + timedelta(days=1)))
+
+    with get_connection() as conn:
+        products = conn.execute("SELECT * FROM products").fetchall()
+        orphans = conn.execute("SELECT COUNT(*) FROM product_observations WHERE product_row_id IS NULL").fetchone()[0]
+        distinct = conn.execute("SELECT COUNT(DISTINCT canonical_key) FROM product_observations").fetchone()[0]
+        linked = conn.execute(
+            "SELECT COUNT(*) FROM product_observations o JOIN products p ON p.id = o.product_row_id "
+            "WHERE p.canonical_key = o.canonical_key AND p.market_id = o.market_id"
+        ).fetchone()[0]
+        total = conn.execute("SELECT COUNT(*) FROM product_observations").fetchone()[0]
+    assert orphans == 0 and linked == total
+    assert len(products) == distinct
+    assert all(p["first_seen_at"] <= p["last_seen_at"] for p in products)
+
+    repo.delete_market(1)
+    with get_connection() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM products").fetchone()[0] == 0

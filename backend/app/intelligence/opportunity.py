@@ -54,6 +54,12 @@ def incumbent_strength(observations: Sequence[Observation], top_n: int = 10) -> 
     }
 
 
+def _saturating(growth: float) -> float:
+    """Map growth % to 0-100 around NEUTRAL without clipping: +50% no longer maxes the component,
+    so strong probes keep their relative order. Roughly linear near zero, flattening toward 0/100."""
+    return NEUTRAL + NEUTRAL * math.tanh(growth / 75.0)
+
+
 def _demand_component(demand: dict | None, reasons: list, caveats: list) -> float:
     if not demand or demand.get("growth_pct") is None:
         caveats.append("No usable Google Trends comparison; demand scored as neutral.")
@@ -61,9 +67,9 @@ def _demand_component(demand: dict | None, reasons: list, caveats: list) -> floa
             caveats.extend(demand.get("caveats", []))
         return NEUTRAL
     growth = float(demand["growth_pct"])
-    value = NEUTRAL + growth
+    swing = growth / 2 if demand.get("low_volume") else growth  # halve the swing when volume is too low to trust
+    value = _saturating(swing)
     if demand.get("low_volume"):
-        value = NEUTRAL + growth / 2  # halve the swing when volume is too low to trust
         caveats.extend(demand.get("caveats", []))
     momentum = demand.get("momentum")
     if momentum == "rising":
